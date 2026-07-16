@@ -1,0 +1,29 @@
+name: Keepalive
+
+# O GitHub desativa workflows agendados sozinho depois de 60 dias sem nenhum
+# commit no repositório (rodar o cron não conta como atividade). Esse workflow
+# faz um commit trivial 1x por mês só pra isso nunca acontecer.
+on:
+  schedule:
+    - cron: "0 12 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Atualizar timestamp
+        run: date -u +"%Y-%m-%dT%H:%M:%SZ" > .keepalive
+
+      - name: Commitar
+        run: |
+          git config user.name "keepalive-bot"
+          git config user.email "actions@github.com"
+          git add .keepalive
+          git commit -m "keepalive: mantém o cron ativo" || echo "nada pra commitar"
+          git push

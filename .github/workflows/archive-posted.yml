@@ -1,0 +1,28 @@
+name: Archive Posted Cards
+
+on:
+  schedule:
+    - cron: "17 6 * * *" # 1x por dia
+  workflow_dispatch:
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+
+      - name: Arquivar cards com Status = Postado
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          ARCHIVE_STATUS_VALUE: ${{ vars.ARCHIVE_STATUS_VALUE }}
+        run: python archive_posted.py
