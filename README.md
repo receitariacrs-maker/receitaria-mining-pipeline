@@ -58,9 +58,11 @@ tokens → crie um token com permissão de "Contents: Read and write" e
    não precisa cartão).
 2. Use o actor **`apify/instagram-reel-scraper`** — testado nesta sessão e
    confirmado que resolve um link de reel específico corretamente (campo de
-   input `username`, com `includeDownloadedVideo: true`; a saída traz o vídeo
-   em `downloadedVideo` ou `videoUrl`). O código já vem configurado pra esse
-   actor por padrão, não precisa mudar nada se usar ele.
+   input `username`). **Não precisa ligar o addon pago "Include downloaded
+   video"** (custa bem mais caro, ~$0,24/vídeo) — a resposta básica já traz de
+   graça o campo `audioUrl` (áudio puro, tudo que a transcrição precisa),
+   além de `videoUrl` como reserva. O código já vem configurado pra esse actor
+   por padrão, não precisa mudar nada se usar ele.
 3. Gere um token de API em Settings → Integrations → API → isso vira
    `APIFY_API_TOKEN`.
 4. **Facebook foi testado e descartado:** o actor oficial `apify/facebook-
