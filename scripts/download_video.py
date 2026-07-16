@@ -17,6 +17,7 @@ import requests
 
 import apify_fetch
 import context
+import notifier
 
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 DOWNLOAD_PATH = "downloaded_media"
@@ -90,4 +91,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    notifier.run_stage(
+        etapa="baixar o vídeo",
+        inicio="⬇️ Baixando o vídeo/áudio...",
+        sucesso="✅ Download concluído. Agora vou transcrever.",
+        func=main,
+        dica_erro="Se for link de Facebook/Instagram, tenta mandar o áudio ou vídeo direto aqui no chat, sem link.",
+    )

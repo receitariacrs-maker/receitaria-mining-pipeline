@@ -14,6 +14,7 @@ import os
 import requests
 
 import context
+import notifier
 import roteiro_parser
 
 NOTION_TOKEN = os.environ["NOTION_TOKEN"]
@@ -199,4 +200,19 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    notifier.start("📋 Salvando o roteiro no Notion...")
+    try:
+        main()
+    except Exception as exc:
+        notifier.error(
+            "salvar no Notion", exc,
+            "Confere se a integração está conectada nas duas databases e se os "
+            "nomes das propriedades batem com o que está configurado.",
+        )
+        raise
+
+    ctx = context.load()
+    if ctx.get("notion_duplicate"):
+        notifier.success(f"🔁 Esse link já tinha sido processado antes. Card existente:\n{ctx['notion_page_url']}")
+    else:
+        notifier.success(f"🎉 Roteiro pronto! Card criado no Notion:\n{ctx['notion_page_url']}")

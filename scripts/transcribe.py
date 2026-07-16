@@ -10,6 +10,7 @@ import subprocess
 import requests
 
 import context
+import notifier
 
 GROQ_API_KEY = os.environ["GROQ_API_KEY"]
 GROQ_TRANSCRIBE_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
@@ -47,4 +48,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    notifier.run_stage(
+        etapa="transcrever o áudio",
+        inicio="🎧 Transcrevendo o áudio...",
+        sucesso="✅ Transcrição pronta. Agora vou escrever o roteiro.",
+        func=main,
+        dica_erro="O áudio pode estar mudo, corrompido, ou muito grande.",
+    )

@@ -15,6 +15,7 @@ import anthropic
 import requests
 
 import context
+import notifier
 
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 KB_GIST_ID = os.environ["KB_GIST_ID"]
@@ -177,4 +178,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    notifier.run_stage(
+        etapa="escrever o roteiro",
+        inicio="✍️ Escrevendo o roteiro no seu estilo...",
+        sucesso="✅ Roteiro pronto. Agora vou salvar no Notion.",
+        func=main,
+        dica_erro="Pode ser algo na base de conhecimento (os Gists) ou na chave da Anthropic.",
+    )

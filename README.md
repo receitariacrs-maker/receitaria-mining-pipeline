@@ -5,6 +5,19 @@ do Telegram. O resto acontece sozinho: baixa a mídia, transcreve, gera um rotei
 no estilo da Receitaria Curiosa (usando sua base de conhecimento) e cria o card
 no "Banco de Roteiros" do Notion.
 
+## O que o bot te avisa no Telegram
+
+O bot manda uma mensagem a cada etapa, não só no início e no fim:
+
+1. 📥 Recebi! Vou processar...
+2. ⬇️ Baixando o vídeo/áudio... → ✅ Download concluído
+3. 🎧 Transcrevendo o áudio... → ✅ Transcrição pronta
+4. ✍️ Escrevendo o roteiro... → ✅ Roteiro pronto
+5. 📋 Salvando o roteiro no Notion... → 🎉 Roteiro pronto! Card criado: [link]
+
+Se alguma etapa falhar, o bot avisa **na hora**, dizendo qual etapa foi e o motivo
+em palavras simples (não só "deu erro") — junto com uma dica do que fazer.
+
 ## Antes de ligar: passo a passo de setup (uma vez só)
 
 ### 1. Bot do Telegram
