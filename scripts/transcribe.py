@@ -1,8 +1,9 @@
 """
 Segundo passo do pipeline pesado. Pega o arquivo baixado (vídeo ou áudio, tanto
-faz), extrai o áudio com ffmpeg (ubuntu-latest já vem com ffmpeg instalado) e
-manda pro Groq transcrever com o whisper-large-v3 (mais preciso que rodar um
-modelo local, e sem gastar tempo de CPU do runner transcrevendo).
+faz), extrai o áudio com ffmpeg (instalado via apt no workflow, ver
+process-video.yml) e manda pro Groq transcrever com o whisper-large-v3 (mais
+preciso que rodar um modelo local, e sem gastar tempo de CPU do runner
+transcrevendo).
 """
 import os
 import subprocess
