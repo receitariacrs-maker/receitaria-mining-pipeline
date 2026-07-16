@@ -27,8 +27,13 @@ DOWNLOAD_PATH = "downloaded_media"
 
 
 def download_tiktok(url: str) -> str:
+    # TikTok normalmente não expõe stream de áudio isolado (só vídeo+áudio
+    # combinado) - "bestaudio" sozinho falha com "Requested format is not
+    # available". Cai pro "best" nesse caso; o transcribe.py já extrai o
+    # áudio via ffmpeg de qualquer arquivo, então baixar o vídeo completo
+    # não é problema.
     subprocess.run(
-        ["yt-dlp", "-f", "bestaudio", "-o", f"{DOWNLOAD_PATH}.%(ext)s", url],
+        ["yt-dlp", "-f", "bestaudio/best", "-o", f"{DOWNLOAD_PATH}.%(ext)s", url],
         check=True,
     )
     matches = [f for f in os.listdir(".") if f.startswith(DOWNLOAD_PATH)]
