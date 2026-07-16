@@ -1,35 +1,33 @@
 """
-Baixa um vídeo do Facebook ou Instagram usando o Apify (scraper pago, centavos por
-vídeo) em vez de tentar acesso direto/login. Roda um "actor" do Apify de forma
-síncrona e pega a URL do vídeo no resultado.
+Baixa um vídeo do Instagram usando o Apify (scraper pago, centavos por vídeo)
+com o actor apify/instagram-reel-scraper — testado e confirmado que resolve
+um link de reel específico corretamente (não é scraper de perfil inteiro).
 
-IMPORTANTE: o nome do campo de input (ex: "startUrls" vs "postURLs" vs
-"directUrls") e o nome do campo de saída com a URL do vídeo variam de actor pra
-actor. Os valores abaixo são um ponto de partida — depois de escolher o actor
-específico no Apify Store (ver README), confira a aba "Input"/"Output" dele e
-ajuste ACTOR_IDS e os nomes de campo se for diferente.
+Facebook NÃO usa Apify — testado com o actor oficial (apify/facebook-reels-
+scraper) e ele só aceita URL de página/perfil (procura uma "seção Reels"),
+rejeitando link de reel específico com "not available without FB login".
+Não vale a pena tentar outros actors, é uma limitação da própria Meta, não
+da ferramenta. Facebook cai direto no fallback manual (ver download_video.py).
 """
 import os
-import time
 
 import requests
 
 APIFY_TOKEN = os.environ["APIFY_API_TOKEN"]
+ACTOR_ID = os.environ.get("APIFY_ACTOR_INSTAGRAM", "apify~instagram-reel-scraper")
 
-ACTOR_IDS = {
-    "facebook": os.environ.get("APIFY_ACTOR_FACEBOOK", "apify~facebook-reels-scraper"),
-    "instagram": os.environ.get("APIFY_ACTOR_INSTAGRAM", "apify~instagram-reel-scraper"),
-}
-
-RUN_SYNC_URL = "https://api.apify.com/v2/acts/{actor_id}/run-sync-get-dataset-items"
+RUN_SYNC_URL = f"https://api.apify.com/v2/acts/{ACTOR_ID}/run-sync-get-dataset-items"
 
 
-def fetch_video_url(platform: str, post_url: str) -> str:
-    actor_id = ACTOR_IDS[platform]
+def fetch_video_url(post_url: str) -> str:
     resp = requests.post(
-        RUN_SYNC_URL.format(actor_id=actor_id),
+        RUN_SYNC_URL,
         params={"token": APIFY_TOKEN},
-        json={"startUrls": [{"url": post_url}]},
+        json={
+            "username": [post_url],
+            "resultsLimit": 1,
+            "includeDownloadedVideo": True,
+        },
         timeout=180,
     )
     resp.raise_for_status()
@@ -38,15 +36,16 @@ def fetch_video_url(platform: str, post_url: str) -> str:
         raise RuntimeError(f"Apify não retornou nenhum resultado para {post_url}")
 
     item = items[0]
-    for key in ("videoUrl", "video_url", "downloadUrl", "playable_url", "url"):
-        if item.get(key):
-            return item[key]
+    # "downloadedVideo" é hospedado pelo próprio Apify (mais estável); "videoUrl"
+    # é o link direto do CDN do Instagram, assinado e expira em poucas horas.
+    video_url = item.get("downloadedVideo") or item.get("videoUrl")
+    if not video_url:
+        raise RuntimeError(f"Apify retornou o reel mas sem vídeo: {item.keys()}")
+    return video_url
 
-    raise RuntimeError(f"Não achei a URL do vídeo no resultado do Apify: {item.keys()}")
 
-
-def download_video(platform: str, post_url: str, dest_path: str) -> str:
-    video_url = fetch_video_url(platform, post_url)
+def download_video(post_url: str, dest_path: str) -> str:
+    video_url = fetch_video_url(post_url)
     with requests.get(video_url, stream=True, timeout=120) as r:
         r.raise_for_status()
         with open(dest_path, "wb") as f:

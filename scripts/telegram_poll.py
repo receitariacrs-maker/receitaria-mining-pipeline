@@ -64,6 +64,15 @@ def handle_message(message: dict) -> None:
     detected = detect_platform(message.get("text", ""))
     if detected:
         platform, url = detected
+        if platform == "facebook":
+            # Testado e confirmado: nenhum jeito automático de baixar um link
+            # específico do Facebook sem login. Avisa na hora, sem gastar um
+            # run inteiro do process-video.yml só pra falhar no final.
+            requests.post(f"{TELEGRAM_API}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": "Link de Facebook eu não consigo baixar sozinho (bloqueio da própria plataforma). Manda o áudio ou vídeo direto aqui no chat, sem link, que eu processo.",
+            }, timeout=15)
+            return
         dispatch_event({
             "source_type": "link",
             "platform": platform,

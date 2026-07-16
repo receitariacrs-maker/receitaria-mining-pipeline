@@ -35,7 +35,6 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
-          APIFY_ACTOR_FACEBOOK: ${{ vars.APIFY_ACTOR_FACEBOOK }}
           APIFY_ACTOR_INSTAGRAM: ${{ vars.APIFY_ACTOR_INSTAGRAM }}
         run: python download_video.py
 

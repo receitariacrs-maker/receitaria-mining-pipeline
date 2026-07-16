@@ -3,7 +3,10 @@ Primeiro passo do pipeline pesado (process-video.yml). Lê o que o telegram_poll
 mandou (client_payload do repository_dispatch), baixa a mídia pelo caminho certo:
 
 - TikTok            -> yt-dlp (sem login, já validado, grátis)
-- Facebook/Instagram (link) -> Apify (apify_fetch.py)
+- Instagram (link)  -> Apify (apify_fetch.py, testado e confirmado)
+- Facebook (link)   -> não dá — testado e confirmado que nenhum scraper resolve
+  um link de reel específico sem login (limitação da Meta). Erro amigável na
+  hora, pedindo pra mandar o áudio/vídeo direto.
 - Áudio/vídeo anexado direto no Telegram -> baixa via Bot API
 
 e grava o caminho do arquivo baixado + metadados no run_context.json pro
@@ -76,8 +79,14 @@ def main() -> None:
 
     if platform == "tiktok":
         local_path = download_tiktok(url)
-    elif platform in ("facebook", "instagram"):
-        local_path = apify_fetch.download_video(platform, url, f"{DOWNLOAD_PATH}.mp4")
+    elif platform == "instagram":
+        local_path = apify_fetch.download_video(url, f"{DOWNLOAD_PATH}.mp4")
+    elif platform == "facebook":
+        raise RuntimeError(
+            "Facebook não tem como baixar automaticamente por link (bloqueio "
+            "sem login, testado e confirmado). Manda o áudio ou vídeo direto "
+            "aqui no chat, sem link."
+        )
     else:
         raise ValueError(f"Plataforma não suportada: {platform}")
 
@@ -96,5 +105,5 @@ if __name__ == "__main__":
         inicio="⬇️ Baixando o vídeo/áudio...",
         sucesso="✅ Download concluído. Agora vou transcrever.",
         func=main,
-        dica_erro="Se for link de Facebook/Instagram, tenta mandar o áudio ou vídeo direto aqui no chat, sem link.",
+        dica_erro="Se for link de Facebook, manda o áudio ou vídeo direto aqui no chat, sem link.",
     )

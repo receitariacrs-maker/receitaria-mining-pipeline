@@ -1,9 +1,11 @@
 # Pipeline de mineração — Telegram → Transcrição → Roteiro → Notion
 
-Você manda um link (TikTok, Facebook, Instagram) ou um áudio/vídeo direto num bot
-do Telegram. O resto acontece sozinho: baixa a mídia, transcreve, gera um roteiro
+Você manda um link (TikTok ou Instagram) ou um áudio/vídeo direto num bot do
+Telegram. O resto acontece sozinho: baixa a mídia, transcreve, gera um roteiro
 no estilo da Receitaria Curiosa (usando sua base de conhecimento) e cria o card
-no "Banco de Roteiros" do Notion.
+no "Banco de Roteiros" do Notion. **Facebook não aceita link** (testado e
+confirmado — ver seção do Apify abaixo) — pra Facebook, manda o áudio/vídeo
+direto no chat, sem link.
 
 ## O que o bot te avisa no Telegram
 
@@ -51,21 +53,22 @@ evitar loop infinito. Por isso: Settings → Developer settings → Fine-grained
 tokens → crie um token com permissão de "Contents: Read and write" e
 "Actions: Read and write" nesse repositório → isso vira `GH_DISPATCH_TOKEN`.
 
-### 5. Apify (Facebook e Instagram)
+### 5. Apify (só Instagram)
 1. Crie uma conta grátis em https://apify.com (plano Free, $5/mês de crédito,
    não precisa cartão).
-2. Escolha um actor de **Facebook Reels Scraper** e um de **Instagram Reel
-   Scraper** na Apify Store — compare 2-3 opções pela confiabilidade das
-   avaliações, não só pelo preço (todos custam centavos no seu volume).
-3. Copie o "ID" de cada actor (formato `usuario~nome-do-actor`) e configure como
-   **variáveis** do repositório (Settings → Secrets and variables → Actions →
-   aba "Variables"): `APIFY_ACTOR_FACEBOOK` e `APIFY_ACTOR_INSTAGRAM`.
-4. Gere um token de API em Settings → Integrations → API → isso vira
+2. Use o actor **`apify/instagram-reel-scraper`** — testado nesta sessão e
+   confirmado que resolve um link de reel específico corretamente (campo de
+   input `username`, com `includeDownloadedVideo: true`; a saída traz o vídeo
+   em `downloadedVideo` ou `videoUrl`). O código já vem configurado pra esse
+   actor por padrão, não precisa mudar nada se usar ele.
+3. Gere um token de API em Settings → Integrations → API → isso vira
    `APIFY_API_TOKEN`.
-5. **Importante:** abra a aba "Input"/"Output" do actor escolhido e confira se
-   os nomes de campo batem com o que está em `scripts/apify_fetch.py`
-   (`startUrls` como input, e os nomes de campo de saída da URL do vídeo). Se
-   for diferente, ajuste esse arquivo.
+4. **Facebook foi testado e descartado:** o actor oficial `apify/facebook-
+   reels-scraper` só aceita URL de página/perfil (procura uma "seção Reels"),
+   e rejeita link de reel específico com erro "not available without FB
+   login". É uma limitação da própria Meta, não do actor — por isso o Facebook
+   não tem caminho automático por link neste pipeline; use o envio manual de
+   áudio/vídeo direto no Telegram para esse caso.
 
 ### 6. Groq (transcrição)
 Se você já tem a chave Groq usada no PolyglotMedia, reaproveita ela. Senão,
@@ -126,8 +129,7 @@ VENCEDORES_DATABASE_ID
 
 E na aba "Variables" (não são segredos, só configuração):
 ```
-APIFY_ACTOR_FACEBOOK
-APIFY_ACTOR_INSTAGRAM
+APIFY_ACTOR_INSTAGRAM    (opcional — só se quiser usar um actor diferente do padrão apify~instagram-reel-scraper)
 ARCHIVE_STATUS_VALUE     (opcional — nome exato da coluna/status "Postado" no seu Kanban; se não setar, usa "Postado")
 ```
 
@@ -144,8 +146,10 @@ status no seu Kanban for diferente, ajuste a variável `ARCHIVE_STATUS_VALUE`.
    mandar um link de TikTok pro bot — confirme que dispara o `process-video.yml`.
 2. Rode `process-video.yml` de novo com o mesmo link — confirme que ele detecta
    que já existe (não duplica o card no Notion).
-3. Teste mandando um link de Facebook/Instagram (Apify) e depois um áudio
-   direto no chat (sem link) — confirme os dois caminhos funcionando.
+3. Teste mandando um link de Instagram (deve baixar via Apify sozinho) e depois
+   um link de Facebook (deve responder na hora pedindo áudio/vídeo direto, sem
+   nem disparar o pipeline pesado) e um áudio direto no chat — confirme os três
+   comportamentos.
 4. Só depois disso, deixe o cron do `telegram-poll.yml` rodando sozinho.
 
 ## Formato do card gerado no Banco de Roteiros
