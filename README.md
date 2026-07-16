@@ -19,16 +19,17 @@ no "Banco de Roteiros" do Notion.
 1. Vá em https://gist.github.com → crie um Gist **privado** (secret) com um
    arquivo chamado `mining_pipeline_state.json` e conteúdo `{}`.
 2. Pegue o ID do Gist (fica na URL, depois do seu usuário).
-3. Gere um **Personal Access Token** (Settings → Developer settings → Fine-grained
-   tokens) com permissão de escrita em Gists → isso vira `GIST_TOKEN`, e o ID do
-   Gist vira `GIST_ID`.
+3. Gere um **Personal Access Token clássico** (Settings → Developer settings →
+   Personal access tokens → **Tokens (classic)** — não use "Fine-grained", eles
+   **não suportam Gist**) com o escopo `gist` marcado → isso vira `GIST_TOKEN`,
+   e o ID do Gist vira `GIST_ID`.
 
 ### 3. Gist privado da base de conhecimento
 1. Crie **outro** Gist privado com dois arquivos: `SISTEMA_VIRAL_RECEITARIA.md`
    e `BANCO_VIRAIS_RECEITARIA.md` (cole o conteúdo desses dois documentos).
-2. Pegue o ID → `KB_GIST_ID`. Gere (ou copie de novo) um token com permissão de
-   leitura em Gists → cole como o secret `KB_GIST_TOKEN` (tem que existir esse
-   secret separado, mesmo que o valor seja igual ao `GIST_TOKEN` do passo 2).
+2. Pegue o ID → `KB_GIST_ID`. Pode reaproveitar o mesmo token clássico do passo
+   2 (mesmo escopo `gist` já serve) — cole o mesmo valor como o secret
+   `KB_GIST_TOKEN` (tem que existir esse secret separado, mesmo com valor igual).
 
 ### 4. Token pra disparar o pipeline (`GH_DISPATCH_TOKEN`)
 Um token normal do `GITHUB_TOKEN` (automático) **não funciona** pra isso — o
