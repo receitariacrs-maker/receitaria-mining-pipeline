@@ -10,6 +10,7 @@ os nomes exatos (acentos incluídos) das colunas da sua database no Notion —
 confira em "Configurações da database -> Propriedades" e ajuste se for diferente.
 """
 import os
+import time
 
 import requests
 
@@ -21,6 +22,8 @@ NOTION_TOKEN = os.environ["NOTION_TOKEN"]
 DATABASE_ID = os.environ["NOTION_DATABASE_ID"]
 NOTION_API = "https://api.notion.com/v1"
 NOTION_VERSION = "2022-06-28"  # versão anterior à separação database/data_source (2025-09-03)
+
+MAX_RETRIES = 3
 
 TITLE_PROP = "Nome"
 NUMERO_PROP = "Número"
@@ -45,16 +48,28 @@ def _headers():
     }
 
 
+def _post_with_retry(url: str, **kwargs) -> requests.Response:
+    """POST com retry (até MAX_RETRIES tentativas) em erro 429 - a Notion limita a
+    ~3 requisições/segundo por integração, e rodar vários vídeos em paralelo (ex.:
+    vários links do Telegram processados ao mesmo tempo) pode estourar isso."""
+    for attempt in range(MAX_RETRIES):
+        resp = requests.post(url, **kwargs)
+        if resp.status_code != 429 or attempt == MAX_RETRIES - 1:
+            resp.raise_for_status()
+            return resp
+        wait = float(resp.headers.get("Retry-After", 1)) * (attempt + 1)
+        time.sleep(wait)
+
+
 def find_existing_page(source_url: str):
     if not source_url:
         return None
-    resp = requests.post(
+    resp = _post_with_retry(
         f"{NOTION_API}/databases/{DATABASE_ID}/query",
         headers=_headers(),
         json={"filter": {"property": LINK_PROP, "url": {"equals": source_url}}},
         timeout=15,
     )
-    resp.raise_for_status()
     results = resp.json().get("results", [])
     return results[0] if results else None
 
@@ -180,7 +195,7 @@ def create_page(ctx: dict) -> str:
             "texto puro. Card não foi criado vazio de propósito; veja o log do passo "
             "'Gerar roteiro (Anthropic)' pra checar a resposta bruta."
         )
-    resp = requests.post(
+    resp = _post_with_retry(
         f"{NOTION_API}/pages",
         headers=_headers(),
         json={
@@ -190,7 +205,6 @@ def create_page(ctx: dict) -> str:
         },
         timeout=30,
     )
-    resp.raise_for_status()
     return resp.json()["url"]
 
 

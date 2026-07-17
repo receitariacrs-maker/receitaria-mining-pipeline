@@ -10,12 +10,15 @@ Antes de gerar, confere se o link de origem já é um vencedor conhecido (base
 "Reciclagem" (remake de algo que já provou funcionar), não uma decisão da IA.
 """
 import os
+import time
 
 import anthropic
 import requests
 
 import context
 import notifier
+
+MAX_RETRIES = 3
 
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 KB_GIST_ID = os.environ["KB_GIST_ID"]
@@ -108,17 +111,20 @@ def find_vencedor_match(source_url: str):
     decisão de categoria da IA."""
     if not (source_url and NOTION_TOKEN and VENCEDORES_DATABASE_ID):
         return None
-    resp = requests.post(
-        f"https://api.notion.com/v1/databases/{VENCEDORES_DATABASE_ID}/query",
-        headers={
-            "Authorization": f"Bearer {NOTION_TOKEN}",
-            "Notion-Version": "2022-06-28",
-            "Content-Type": "application/json",
-        },
-        json={"filter": {"property": VENCEDORES_LINK_PROP, "url": {"equals": source_url}}},
-        timeout=15,
-    )
-    resp.raise_for_status()
+    url = f"https://api.notion.com/v1/databases/{VENCEDORES_DATABASE_ID}/query"
+    headers = {
+        "Authorization": f"Bearer {NOTION_TOKEN}",
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
+    }
+    payload = {"filter": {"property": VENCEDORES_LINK_PROP, "url": {"equals": source_url}}}
+    for attempt in range(MAX_RETRIES):
+        resp = requests.post(url, headers=headers, json=payload, timeout=15)
+        if resp.status_code != 429 or attempt == MAX_RETRIES - 1:
+            resp.raise_for_status()
+            break
+        wait = float(resp.headers.get("Retry-After", 1)) * (attempt + 1)
+        time.sleep(wait)
     results = resp.json().get("results", [])
     if not results:
         return None
