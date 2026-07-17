@@ -2,8 +2,10 @@ name: Telegram Poll
 
 on:
   schedule:
-    # evita cair exatamente na hora cheia (GitHub atrasa agendamentos nesses horários)
-    - cron: "7,22,37,52 * * * *"
+    # roda a cada 3 min pra reagir rápido quando 7+ vídeos chegam de uma vez
+    # (ver BATCH_TRIGGER em telegram_poll.py); minutos ímpares evitam cair
+    # exatamente na hora cheia, onde o GitHub costuma atrasar agendamentos
+    - cron: "1-59/3 * * * *"
   workflow_dispatch:
 
 concurrency:

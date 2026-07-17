@@ -116,15 +116,22 @@ LIMITE_RAPIDA = (1200, 1300)
 LIMITE_SHORTS = (500, 600)
 
 
+_MARCADOR_COLCHETES_RE = re.compile(r"\[[^\]]*\]")
+
+
 def _tamanho_falado(texto: str) -> int:
-    """Conta caracteres do texto falado, ignorando marcadores de tempo/etapa
-    entre colchetes (linhas tipo '[0-10s - Etapa]') e linhas de meta que
-    porventura vazem pro conteúdo."""
-    linhas = [
-        l for l in texto.splitlines()
-        if l.strip() and not re.match(r"^\[.*\]$", l.strip())
-        and not l.strip().lower().startswith("meta de caracteres")
-    ]
+    """Conta caracteres do texto falado, removendo marcadores de tempo/etapa
+    entre colchetes (ex: '[1:00-1:15 - Resultado + CTA]') em qualquer posição
+    da linha — sozinhos numa linha própria ou grudados com o texto de
+    narração — e ignorando linhas de meta que porventura vazem pro conteúdo.
+    Os colchetes continuam no roteiro salvo (são referência de edição), só não
+    entram na contagem que valida a meta de caracteres."""
+    linhas = []
+    for l in texto.splitlines():
+        l = _MARCADOR_COLCHETES_RE.sub("", l).strip()
+        if not l or l.lower().startswith("meta de caracteres"):
+            continue
+        linhas.append(l)
     return len(" ".join(linhas))
 
 

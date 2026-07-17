@@ -34,13 +34,3 @@ def save_state(state: dict) -> None:
     payload = {"files": {STATE_FILENAME: {"content": json.dumps(state, indent=2, ensure_ascii=False)}}}
     resp = requests.patch(GIST_API, headers=_headers(), json=payload, timeout=15)
     resp.raise_for_status()
-
-
-def get_offset() -> int:
-    return load_state().get("telegram_offset", 0)
-
-
-def set_offset(offset: int) -> None:
-    state = load_state()
-    state["telegram_offset"] = offset
-    save_state(state)
