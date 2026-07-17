@@ -18,6 +18,7 @@ em sequência).
 import os
 import re
 import time
+import uuid
 
 import requests
 
@@ -136,8 +137,20 @@ def main() -> None:
     )
     if len(queue) >= BATCH_TRIGGER or esperando_ha_muito:
         use_cache = len(queue) > 1
+        # lote rastreado só faz sentido com mais de 1 vídeo - pra um vídeo
+        # avulso, o aviso de sucesso/erro dele já cobre "acabou".
+        lote_id = uuid.uuid4().hex if use_cache else None
+        if lote_id:
+            state["lote_atual"] = {
+                "id": lote_id,
+                "total": len(queue),
+                "concluidos": 0,
+                "chat_id": queue[0]["chat_id"],
+            }
         for payload in queue:
             payload["use_cache"] = use_cache
+            if lote_id:
+                payload["lote_id"] = lote_id
             dispatch_event(payload)
         queue = []
         queued_since = None
