@@ -3,6 +3,12 @@ Roda a cada 5-10 min (telegram-poll.yml). Pergunta pro Telegram "tem mensagem no
 olha só as suas (TELEGRAM_ALLOWED_USER_ID), decide se é um link (TikTok/Facebook/
 Instagram) ou um arquivo de áudio/vídeo anexado, e dispara o pipeline pesado
 (process-video.yml) via repository_dispatch pra cada uma encontrada.
+
+Se mais de um vídeo for detectado no mesmo ciclo de polling, marca "use_cache"
+no payload de todos eles — o generate_script.py usa isso pra decidir se ativa
+o cache de prompt da Anthropic (só compensa quando tem mais de uma chamada
+batendo na mesma base de conhecimento em sequência; com um vídeo só, o prêmio
+de escrita do cache sai mais caro do que simplesmente não usar cache).
 """
 import os
 import re
@@ -46,20 +52,22 @@ def dispatch_event(client_payload: dict) -> None:
     resp.raise_for_status()
 
 
-def handle_message(message: dict) -> None:
+def handle_message(message: dict) -> dict | None:
+    """Decide o que fazer com a mensagem. Devolve o payload pronto pra disparar
+    no process-video.yml, ou None se a mensagem não gerou vídeo pra processar
+    (link de Facebook ou texto não reconhecido — já respondidos aqui direto)."""
     chat_id = message["chat"]["id"]
 
     # Mensagem já é mídia (áudio, vídeo, ou voice) -> pula download automático
     for media_key in ("audio", "video", "voice"):
         if media_key in message:
             file_id = message[media_key]["file_id"]
-            dispatch_event({
+            return {
                 "source_type": "media",
                 "media_type": media_key,
                 "file_id": file_id,
                 "chat_id": chat_id,
-            })
-            return
+            }
 
     detected = detect_platform(message.get("text", ""))
     if detected:
@@ -72,20 +80,20 @@ def handle_message(message: dict) -> None:
                 "chat_id": chat_id,
                 "text": "Link de Facebook eu não consigo baixar sozinho (bloqueio da própria plataforma). Manda o áudio ou vídeo direto aqui no chat, sem link, que eu processo.",
             }, timeout=15)
-            return
-        dispatch_event({
+            return None
+        return {
             "source_type": "link",
             "platform": platform,
             "url": url,
             "chat_id": chat_id,
-        })
-        return
+        }
 
     # Texto que não é link nem mídia reconhecida -> avisa e ignora
     requests.post(f"{TELEGRAM_API}/sendMessage", json={
         "chat_id": chat_id,
         "text": "Não reconheci um link (TikTok/Facebook/Instagram) nem um áudio/vídeo nessa mensagem.",
     }, timeout=15)
+    return None
 
 
 def main() -> None:
@@ -98,6 +106,7 @@ def main() -> None:
     updates = resp.json().get("result", [])
 
     highest_update_id = offset - 1
+    payloads = []
     for update in updates:
         highest_update_id = max(highest_update_id, update["update_id"])
         message = update.get("message")
@@ -105,7 +114,17 @@ def main() -> None:
             continue
         if message.get("from", {}).get("id") != ALLOWED_USER_ID:
             continue
-        handle_message(message)
+        payload = handle_message(message)
+        if payload:
+            payloads.append(payload)
+
+    # Só compensa cachear a base de conhecimento se tiver mais de um vídeo
+    # nesse ciclo — com um único vídeo, o prêmio de escrita do cache custa
+    # mais do que simplesmente não usar cache.
+    use_cache = len(payloads) > 1
+    for payload in payloads:
+        payload["use_cache"] = use_cache
+        dispatch_event(payload)
 
     if highest_update_id >= offset:
         state_store.set_offset(highest_update_id + 1)

@@ -134,15 +134,22 @@ def find_vencedor_match(source_url: str):
     return page["id"], nome
 
 
-def build_system_prompt(kb: str, vencedor_nome: str | None) -> str:
+def build_system_prompt(kb: str, vencedor_nome: str | None, use_cache: bool):
+    """Monta o prompt de sistema. A parte estável (instruções + formato + base de
+    conhecimento) é idêntica em toda chamada — quando use_cache=True, ela vai num
+    bloco próprio com cache_control, e a instrução de reciclagem (que varia por
+    vídeo) fica de fora, no final, pra não invalidar o prefixo cacheado.
+    use_cache só deve vir True quando o telegram_poll.py detectou mais de um
+    vídeo no mesmo ciclo — com um vídeo só, o prêmio de escrita do cache custa
+    mais do que não cachear (ver TTL 1h: escrita 2x vs leitura 0,1x)."""
     instrucoes_reciclagem = (
-        f'\n\nATENÇÃO: este vídeo de referência já é um vencedor conhecido do seu histórico '
+        f'ATENÇÃO: este vídeo de referência já é um vencedor conhecido do seu histórico '
         f'("{vencedor_nome}"). Isso é uma RECICLAGEM — use "PILAR: Reciclagem" obrigatoriamente, '
         f"e mantenha a estrutura/gancho que já provou funcionar, só refrescando ângulo/frase de "
         f"abertura pra não soar repetido."
         if vencedor_nome else ""
     )
-    return (
+    stable_prompt = (
         "Você é o redator viral da Receitaria Curiosa. Use a base de conhecimento abaixo "
         "(regras de linguagem, frameworks de gancho, banco de roteiros testados) para "
         "escrever um roteiro novo de vídeo curto, no mesmo estilo e estrutura dos roteiros "
@@ -150,7 +157,6 @@ def build_system_prompt(kb: str, vencedor_nome: str | None) -> str:
         "fornecer. Não copie a transcrição literalmente — adapte pro formato e gancho de "
         "vídeo curto, respeitando as regras de linguagem/compliance do documento (evitar "
         "termos clínicos e frases de watchbait)."
-        + instrucoes_reciclagem
         + "\n\n" + FORMATO_SAIDA.format(categorias=", ".join(CATEGORIAS), pilares=", ".join(PILARES))
         + "\n\n" + kb
         + "\n\n⚠️ ATENÇÃO — CONFLITO DE FORMATO: a base de conhecimento acima tem uma seção "
@@ -163,17 +169,30 @@ def build_system_prompt(kb: str, vencedor_nome: str | None) -> str:
         "cabeçalhos, sem texto antes ou depois."
     )
 
+    if not use_cache:
+        return stable_prompt + ("\n\n" + instrucoes_reciclagem if instrucoes_reciclagem else "")
+
+    system = [{
+        "type": "text",
+        "text": stable_prompt,
+        "cache_control": {"type": "ephemeral", "ttl": "1h"},
+    }]
+    if instrucoes_reciclagem:
+        system.append({"type": "text", "text": instrucoes_reciclagem})
+    return system
+
 
 def main() -> None:
     ctx = context.load()
     kb = fetch_kb()
     vencedor = find_vencedor_match(ctx.get("source_url"))
+    use_cache = bool(ctx.get("use_cache"))
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
     message = client.messages.create(
         model=MODEL,
         max_tokens=4096,
-        system=build_system_prompt(kb, vencedor[1] if vencedor else None),
+        system=build_system_prompt(kb, vencedor[1] if vencedor else None, use_cache),
         messages=[{
             "role": "user",
             "content": (
@@ -183,6 +202,12 @@ def main() -> None:
             ),
         }],
     )
+
+    if use_cache:
+        print(
+            f"--- Cache de prompt: escrita={message.usage.cache_creation_input_tokens} "
+            f"tokens, leitura={message.usage.cache_read_input_tokens} tokens ---"
+        )
 
     roteiro_text = "".join(block.text for block in message.content if block.type == "text")
     print("--- Resposta bruta da Claude (primeiros 500 chars) ---")
