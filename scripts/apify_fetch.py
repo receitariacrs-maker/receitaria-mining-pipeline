@@ -20,7 +20,12 @@ import os
 import requests
 
 APIFY_TOKEN = os.environ["APIFY_API_TOKEN"]
-ACTOR_ID = os.environ.get("APIFY_ACTOR_INSTAGRAM", "apify~instagram-reel-scraper")
+# "or" em vez de .get(..., default): a variável do GitHub Actions
+# (vars.APIFY_ACTOR_INSTAGRAM) existe como env var mesmo sem estar configurada
+# no repositório, só que vazia - .get() não cai no default nesse caso (só cai
+# quando a chave não existe), então uma env var vazia virava um ator Apify
+# vazio na URL (.../acts//run-sync...) e todo link de Instagram falhava com 404.
+ACTOR_ID = os.environ.get("APIFY_ACTOR_INSTAGRAM") or "apify~instagram-reel-scraper"
 
 RUN_SYNC_URL = f"https://api.apify.com/v2/acts/{ACTOR_ID}/run-sync-get-dataset-items"
 

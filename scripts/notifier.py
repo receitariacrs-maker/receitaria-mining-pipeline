@@ -13,14 +13,14 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 
-def _chat_id():
-    return context.load().get("chat_id")
-
-
 def _send(text: str) -> None:
-    chat_id = _chat_id()
+    ctx = context.load()
+    chat_id = ctx.get("chat_id")
     if not (BOT_TOKEN and chat_id):
         return
+    rotulo = ctx.get("rotulo")
+    if rotulo:
+        text = f"🏷️ {rotulo}\n{text}"
     requests.post(f"{TELEGRAM_API}/sendMessage", json={"chat_id": chat_id, "text": text}, timeout=15)
 
 

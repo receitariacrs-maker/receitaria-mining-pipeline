@@ -71,32 +71,60 @@ MODO DE PREPARO
 3. [Passo final / como usar]
 
 ROTEIRO VERSAO-MAE
-[0-10s - Etapa]
-[Texto falado da versão mãe, com detalhes e aplicação.]
+[0-10s - Gancho]
+[Texto falado, 2 a 4 frases completas — não uma linha solta.]
 
-[10-25s - Etapa]
-[Continuação...]
+[10-25s - Contexto/História]
+[Continuação, 2 a 4 frases completas.]
+
+[25-50s - Explicação do Problema]
+[Continuação, 2 a 4 frases completas.]
+
+[50s-2min - Passo a Passo Completo, com detalhe de cada ingrediente]
+[Continuação, 2 a 4 frases completas — normalmente precisa de 2 a 3 blocos
+de tempo/etapa pra caber o passo a passo inteiro com detalhe, não só 1.]
+
+[2min-2min30 - Por que Funciona]
+[Continuação, 2 a 4 frases completas.]
 
 [Tempo final - Chamada para Ação]
-[Texto de fechamento.]
+[Texto de fechamento, 2 a 3 frases completas.]
 Meta de caracteres desta versão: entre 3.600 e 3.700 caracteres de texto
-falado (não conte os marcadores de tempo/etapa entre colchetes).
+falado (não conte os marcadores de tempo/etapa entre colchetes) — isso
+equivale a aproximadamente 650-700 palavras, ou uns 7-9 blocos de
+[Tempo - Etapa] como os do exemplo acima, cada um com 2 a 4 frases completas
+(nunca frases soltas de uma linha só). ATENÇÃO: o erro mais comum é entregar
+essa versão curta demais (na prática, a IA costuma parar por volta de
+2.200-2.500 caracteres, bem abaixo da meta) — se ao planejar a resposta você
+perceber que vai fechar abaixo de 3.500 caracteres, ANTES de finalizar volte
+e desenvolva mais cada bloco (mais detalhe de aplicação, mais explicação do
+porquê funciona, mais contexto/história), em vez de simplesmente encerrar
+cedo. É uma versão longa de propósito — trate os placeholders do exemplo como
+o mínimo de blocos, não o máximo.
 
 ROTEIRO VERSAO-RAPIDA
-[0-3s - Etapa]
-[Texto da versão de 1 minuto, ritmo acelerado.]
+[0-3s - Gancho]
+[Texto da versão de 1 minuto, ritmo acelerado, 2 a 3 frases completas.]
 
-[3-10s - Etapa]
-[Continuação...]
+[3-15s - Contexto/Problema]
+[Continuação, 2 a 3 frases completas.]
+
+[15-45s - Passo a Passo Resumido]
+[Continuação, 2 a 3 frases completas.]
+
+[45s-1min - Chamada para Ação]
+[Continuação, 1 a 2 frases completas.]
 Meta de caracteres desta versão: entre 1.200 e 1.300 caracteres de texto
-falado (não conte os marcadores de tempo/etapa entre colchetes).
+falado (não conte os marcadores de tempo/etapa entre colchetes) — uns
+200-250 palavras. Mesmo aviso da versão-mãe: não encerre cedo demais, prefira
+desenvolver mais cada bloco a ficar abaixo da meta.
 
 ROTEIRO VERSAO-SHORTS
 - 0-3s: "[Frase de impacto inicial]"
 - 3-18s: "[Lista de benefícios em ritmo curto, sem quantidades exatas, 3 a 5 benefícios]"
 - 18-30s: "[Chamada de ação direta]"
 Meta de caracteres desta versão: entre 500 e 600 caracteres de texto falado
-(não conte os marcadores de tempo entre colchetes).
+(não conte os marcadores de tempo entre colchetes) — uns 85-100 palavras.
 
 Regras adicionais:
 - TITULO_CURTO deve ser um mini-título autoexplicativo seguido da categoria
@@ -109,6 +137,11 @@ Regras adicionais:
   passo curto e imperativo — não escreva parágrafo corrido.
 - Não numere nada além do [Número] no título. Não use emoji em cabeçalho,
   tag ou em nenhuma parte da resposta.
+- IMPORTANTE sobre tamanho: as metas de caracteres de cada versão (acima) são
+  regra obrigatória, não sugestão. O padrão de erro mais comum é entregar
+  texto curto demais, principalmente na VERSAO-MAE. Antes de finalizar cada
+  versão, conte mentalmente se já bateu a meta mínima — se não bateu,
+  desenvolva mais em vez de encerrar.
 """.strip()
 
 LIMITE_MAE = (3600, 3700)
@@ -308,10 +341,19 @@ def main() -> None:
     print("--- Resposta bruta da Claude (primeiros 500 chars) ---")
     print(roteiro_text[:500])
     print("--- fim do trecho ---")
-    context.update(
+
+    # troca o rótulo provisório (link/legenda) pelo tema+categoria de verdade
+    # assim que dá pra saber - as mensagens de Telegram daqui pra frente (e o
+    # aviso de sucesso desta própria etapa) passam a identificar o vídeo certo.
+    parsed_final = roteiro_parser.parse(roteiro_text)
+    titulo_final = parsed_final.get("titulo_curto") or parsed_final.get("titulo")
+    update_kwargs = dict(
         roteiro=roteiro_text,
         vencedor_relacionado_id=vencedor[0] if vencedor else None,
     )
+    if titulo_final:
+        update_kwargs["rotulo"] = titulo_final
+    context.update(**update_kwargs)
 
 
 if __name__ == "__main__":

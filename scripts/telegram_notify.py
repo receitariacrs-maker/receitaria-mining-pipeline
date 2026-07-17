@@ -8,6 +8,7 @@ import sys
 
 import context
 import notifier
+import rotulo
 
 
 def main() -> None:
@@ -17,6 +18,9 @@ def main() -> None:
         return  # sem client_payload ainda (ex: falhou antes do bootstrap do contexto)
 
     if stage == "received":
+        # rótulo provisório (link ou legenda/horário) - generate_script.py troca
+        # pelo tema+categoria de verdade assim que o roteiro é gerado.
+        context.update(rotulo=rotulo.provisorio(ctx))
         notifier.start("📥 Recebi! Vou processar (baixar, transcrever, escrever o roteiro e salvar no Notion).")
     elif stage == "error" and not ctx.get("error_notified"):
         notifier.error(

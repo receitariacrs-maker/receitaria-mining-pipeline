@@ -75,6 +75,8 @@ def handle_message(message: dict) -> dict | None:
                 "media_type": media_key,
                 "file_id": file_id,
                 "chat_id": chat_id,
+                "caption": message.get("caption"),
+                "sent_at": message.get("date"),
             }
 
     detected = detect_platform(message.get("text", ""))
