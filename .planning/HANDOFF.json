@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-17T00:53:27.173Z",
+  "phase": null,
+  "phase_name": null,
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "note": "This project has no GSD phase/plan scaffolding (.planning/phases, ROADMAP.md, STATE.md do not exist). Handoff adapted to describe the session's actual work: setting up and end-to-end testing the receitaria-mining-pipeline (Telegram -> transcricao -> roteiro -> Notion).",
+  "completed_tasks": [
+    {"id": 1, "name": "Confirmar integracao Notion conectada nas 2 databases", "status": "done"},
+    {"id": 2, "name": "Criar propriedades faltantes no Banco de Roteiros (Pilar estrategico, Link de origem, Vencedor relacionado)", "status": "done"},
+    {"id": 3, "name": "Corrigir Gist da base de conhecimento (nome do arquivo + arquivo faltante)", "status": "done"},
+    {"id": 4, "name": "Confirmar os 13 secrets no GitHub", "status": "done"},
+    {"id": 5, "name": "Corrigir bug de download do TikTok (bestaudio -> bestaudio/best)", "status": "done", "commit": "f348ccf"},
+    {"id": 6, "name": "Instalar ffmpeg no workflow (nao vem mais por padrao no ubuntu-latest)", "status": "done", "commit": "0de52ac"},
+    {"id": 7, "name": "Corrigir conflito de formato no prompt do generate_script.py (causa de cards vazios)", "status": "done", "commit": "e796ceb"},
+    {"id": 8, "name": "Teste de ponta a ponta completo com sucesso", "status": "done"}
+  ],
+  "remaining_tasks": [
+    {"id": 9, "name": "Decidir se ativa o cron do telegram-poll.yml pra rodar sozinho (proximo passo natural do README, ainda nao confirmado com o usuario)", "status": "not_started"},
+    {"id": 10, "name": "Avaliar se vale implementar prompt caching pra reduzir custo por roteiro (~45k tokens de KB reenviados a cada chamada)", "status": "not_started"}
+  ],
+  "blockers": [],
+  "human_actions_pending": [
+    {"action": "Decidir sobre ligar o cron automatico do telegram-poll.yml", "context": "README recomenda so ligar o cron depois de validar TikTok/Instagram/Facebook/audio direto manualmente — TikTok ja validado nesta sessao, Instagram/Facebook/audio direto ainda nao testados no fluxo automatizado", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "Manter FORMATO_SAIDA do codigo como fonte de verdade para o parser, com instrucao explicita no prompt pra ignorar a secao 11 da KB", "rationale": "A KB tem seu proprio formato de entrega (emojis, blocos de analise) pensado pro uso manual do agente Cowork, que competia com o formato de tags que o roteiro_parser.py espera"},
+    {"decision": "Adicionar validacao que falha alto (RuntimeError) se o parsing do roteiro vier vazio, em vez de criar card com titulo generico 'Roteiro minerado'", "rationale": "Bate com a preferencia do usuario de sempre ter feedback de erro claro, nunca falha silenciosa"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Perguntar ao usuario se quer deixar o cron do telegram-poll.yml rodando sozinho agora que o teste de ponta a ponta passou, ou se quer testar Instagram/Facebook/audio direto primeiro (conforme checklist do README secao 'Testando antes de ligar de vez').",
+  "context_notes": "Pipeline esta funcional de ponta a ponta (confirmado por teste real com link de TikTok). Os 3 bugs encontrados foram todos via teste empirico, nao suposicao — consistente com a preferencia do usuario de validar na pratica antes de confiar em algo. Card real ja foi criado no Banco de Roteiros a partir desse teste (nao e lixo de teste, e conteudo real que o usuario queria gravar)."
+}
