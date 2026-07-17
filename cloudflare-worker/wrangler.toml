@@ -1,0 +1,14 @@
+name = "receitaria-telegram-webhook"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Secrets (NÃO vão aqui - configure via `wrangler secret put NOME` ou pelo
+# painel do Cloudflare, em Settings > Variables and Secrets, tipo "Secret"):
+#   TELEGRAM_BOT_TOKEN
+#   TELEGRAM_ALLOWED_USER_ID
+#   GH_DISPATCH_TOKEN
+#   GITHUB_REPOSITORY        (ex: "receitariacrs-maker/receitaria-mining-pipeline")
+#   GIST_TOKEN
+#   GIST_ID
+#   WEBHOOK_SETUP_SECRET     (qualquer string aleatória sua, só pra proteger
+#                             a rota /setup-webhook)

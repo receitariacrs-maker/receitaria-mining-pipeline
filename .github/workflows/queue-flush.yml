@@ -1,0 +1,34 @@
+name: Queue Flush (fallback)
+
+on:
+  schedule:
+    # rede de segurança de baixa frequência - a detecção de mensagem nova
+    # agora é o Worker do Cloudflare (webhook, instantâneo). Isso aqui só
+    # cobre o caso raro de algo ficar preso na fila (ver scripts/queue_flush.py)
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: queue-flush
+  cancel-in-progress: false
+
+jobs:
+  flush:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+
+      - name: Checar se a fila ficou presa
+        working-directory: scripts
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GH_DISPATCH_TOKEN: ${{ secrets.GH_DISPATCH_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python queue_flush.py
