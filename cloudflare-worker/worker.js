@@ -50,6 +50,9 @@ async function githubRequest(env, url, options = {}) {
     ...options,
     headers: {
       Accept: "application/vnd.github+json",
+      // a API do GitHub recusa qualquer requisição sem User-Agent (403
+      // "Request forbidden by administrative rules") - não é opcional.
+      "User-Agent": "receitaria-mining-pipeline-worker",
       ...options.headers,
     },
   });
@@ -147,16 +150,26 @@ async function handleMessage(env, message) {
 
 async function handleTelegramWebhook(request, env) {
   const update = await request.json();
+  console.log("update recebido:", JSON.stringify(update));
+
   const message = update.message;
-  if (!message) return new Response("ok");
+  if (!message) {
+    console.log("ignorado: update sem 'message' (ex: edited_message, callback_query, etc.)");
+    return new Response("ok");
+  }
+
+  console.log("from.id recebido:", message.from?.id, "| esperado (TELEGRAM_ALLOWED_USER_ID):", env.TELEGRAM_ALLOWED_USER_ID);
   if (String(message.from?.id) !== String(env.TELEGRAM_ALLOWED_USER_ID)) {
+    console.log("ignorado: from.id não bate com TELEGRAM_ALLOWED_USER_ID");
     return new Response("ok"); // ignora qualquer um que não seja você
   }
 
   const payload = await handleMessage(env, message);
+  console.log("payload calculado:", JSON.stringify(payload));
   if (!payload) return new Response("ok");
 
   const state = await loadState(env);
+  console.log("estado carregado do Gist:", JSON.stringify(state));
   const queue = state.pending_queue || [];
   queue.push(payload);
   let queuedSince = state.pending_queue_since;
@@ -198,6 +211,7 @@ async function handleTelegramWebhook(request, env) {
   }
 
   await saveState(env, state);
+  console.log("estado salvo no Gist com sucesso, fila agora:", JSON.stringify(state.pending_queue));
   return new Response("ok");
 }
 
