@@ -191,7 +191,13 @@ def main() -> None:
 
     message = client.messages.create(
         model=MODEL,
-        max_tokens=4096,
+        max_tokens=8192,
+        # claude-sonnet-5 roda com "adaptive thinking" ligado por padrão quando esse
+        # parâmetro é omitido (diferente do Sonnet 4.6) - sem desligar, o "pensamento"
+        # pode consumir o max_tokens inteiro antes de escrever o roteiro, devolvendo
+        # resposta vazia. Essa tarefa é só formatação seguindo um template, não precisa
+        # de raciocínio em múltiplas etapas.
+        thinking={"type": "disabled"},
         system=build_system_prompt(kb, vencedor[1] if vencedor else None, use_cache),
         messages=[{
             "role": "user",
@@ -210,6 +216,7 @@ def main() -> None:
         )
 
     roteiro_text = "".join(block.text for block in message.content if block.type == "text")
+    print(f"--- stop_reason: {message.stop_reason} ---")
     print("--- Resposta bruta da Claude (primeiros 500 chars) ---")
     print(roteiro_text[:500])
     print("--- fim do trecho ---")
