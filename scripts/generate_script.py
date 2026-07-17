@@ -10,6 +10,7 @@ Antes de gerar, confere se o link de origem já é um vencedor conhecido (base
 "Reciclagem" (remake de algo que já provou funcionar), não uma decisão da IA.
 """
 import os
+import re
 import time
 
 import anthropic
@@ -17,6 +18,7 @@ import requests
 
 import context
 import notifier
+import roteiro_parser
 
 MAX_RETRIES = 3
 
@@ -48,6 +50,7 @@ explicações antes ou depois):
 
 CATEGORIA: [uma das opções: {categorias}]
 PILAR: [uma das opções: {pilares}]
+TITULO_CURTO: [Mini-título autoexplicativo (Categoria)]
 
 [Número]. [Título Principal do Roteiro]
 
@@ -58,10 +61,14 @@ B: [Opção de Título B - foco em resultado ou promessa de transformação]
 HASHTAGS
 #[tag1] #[tag2] #[tag3] #[tag4]
 
-RECEITA RESUMIDA
+INGREDIENTES
 - [Ingrediente 1]
 - [Ingrediente 2]
-[Instruções de preparo e uso em um parágrafo contínuo, sem listas nem traços.]
+
+MODO DE PREPARO
+1. [Primeiro passo, curto e direto]
+2. [Segundo passo]
+3. [Passo final / como usar]
 
 ROTEIRO VERSAO-MAE
 [0-10s - Etapa]
@@ -72,6 +79,8 @@ ROTEIRO VERSAO-MAE
 
 [Tempo final - Chamada para Ação]
 [Texto de fechamento.]
+Meta de caracteres desta versão: entre 3.600 e 3.700 caracteres de texto
+falado (não conte os marcadores de tempo/etapa entre colchetes).
 
 ROTEIRO VERSAO-RAPIDA
 [0-3s - Etapa]
@@ -79,14 +88,58 @@ ROTEIRO VERSAO-RAPIDA
 
 [3-10s - Etapa]
 [Continuação...]
+Meta de caracteres desta versão: entre 1.200 e 1.300 caracteres de texto
+falado (não conte os marcadores de tempo/etapa entre colchetes).
 
 ROTEIRO VERSAO-SHORTS
 - 0-3s: "[Frase de impacto inicial]"
-- 3-18s: "[Lista de benefícios em ritmo curto]"
+- 3-18s: "[Lista de benefícios em ritmo curto, sem quantidades exatas, 3 a 5 benefícios]"
 - 18-30s: "[Chamada de ação direta]"
+Meta de caracteres desta versão: entre 500 e 600 caracteres de texto falado
+(não conte os marcadores de tempo entre colchetes).
 
-Não numere nada além do [Número] no título. Não use emoji nos cabeçalhos.
+Regras adicionais:
+- TITULO_CURTO deve ser um mini-título autoexplicativo seguido da categoria
+  entre parênteses, ex: "Óleo de Alecrim Anticaspa (Cabelo & Fios)" — não
+  precisa listar todos os ingredientes literalmente, só comunicar o tema em
+  poucas palavras.
+- Em INGREDIENTES, cada linha começa com "- " e traz só o item (sem
+  quantidade obrigatória, pode incluir se for curto).
+- Em MODO DE PREPARO, cada linha começa com "N. " (número sequencial) e é um
+  passo curto e imperativo — não escreva parágrafo corrido.
+- Não numere nada além do [Número] no título. Não use emoji em cabeçalho,
+  tag ou em nenhuma parte da resposta.
 """.strip()
+
+LIMITE_MAE = (3600, 3700)
+LIMITE_RAPIDA = (1200, 1300)
+LIMITE_SHORTS = (500, 600)
+
+
+def _tamanho_falado(texto: str) -> int:
+    """Conta caracteres do texto falado, ignorando marcadores de tempo/etapa
+    entre colchetes (linhas tipo '[0-10s - Etapa]') e linhas de meta que
+    porventura vazem pro conteúdo."""
+    linhas = [
+        l for l in texto.splitlines()
+        if l.strip() and not re.match(r"^\[.*\]$", l.strip())
+        and not l.strip().lower().startswith("meta de caracteres")
+    ]
+    return len(" ".join(linhas))
+
+
+def _fora_da_meta(parsed: dict) -> list[str]:
+    problemas = []
+    tam_mae = _tamanho_falado(parsed["versao_mae"])
+    if not (LIMITE_MAE[0] <= tam_mae <= LIMITE_MAE[1]):
+        problemas.append(f"VERSAO-MAE tem {tam_mae} caracteres (meta: {LIMITE_MAE[0]}-{LIMITE_MAE[1]}).")
+    tam_rapida = _tamanho_falado(parsed["versao_rapida"])
+    if not (LIMITE_RAPIDA[0] <= tam_rapida <= LIMITE_RAPIDA[1]):
+        problemas.append(f"VERSAO-RAPIDA tem {tam_rapida} caracteres (meta: {LIMITE_RAPIDA[0]}-{LIMITE_RAPIDA[1]}).")
+    tam_shorts = _tamanho_falado(parsed["versao_shorts"])
+    if not (LIMITE_SHORTS[0] <= tam_shorts <= LIMITE_SHORTS[1]):
+        problemas.append(f"VERSAO-SHORTS tem {tam_shorts} caracteres (meta: {LIMITE_SHORTS[0]}-{LIMITE_SHORTS[1]}).")
+    return problemas
 
 
 def fetch_kb() -> str:
@@ -163,10 +216,12 @@ def build_system_prompt(kb: str, vencedor_nome: str | None, use_cache: bool):
         "'FORMATO DE ENTREGA OBRIGATÓRIO' (com blocos 📊 ANÁLISE, 🔴🟠🟡 ROTEIRO) pensada pra "
         "colar manualmente no agente Cowork — NÃO é o formato que você deve usar aqui. Aqui, "
         "IGNORE COMPLETAMENTE aquela seção e use EXCLUSIVAMENTE o formato de tags de texto puro "
-        "definido acima (CATEGORIA:, PILAR:, TITULOS A/B, HASHTAGS, RECEITA RESUMIDA, ROTEIRO "
-        "VERSAO-MAE, ROTEIRO VERSAO-RAPIDA, ROTEIRO VERSAO-SHORTS) — um script vai fazer parsing "
-        "automático da sua resposta procurando exatamente essas tags, sem markdown, sem emoji nos "
-        "cabeçalhos, sem texto antes ou depois."
+        "definido acima (CATEGORIA:, PILAR:, TITULO_CURTO:, TITULOS A/B, HASHTAGS, INGREDIENTES, "
+        "MODO DE PREPARO, ROTEIRO VERSAO-MAE, ROTEIRO VERSAO-RAPIDA, ROTEIRO VERSAO-SHORTS) — um "
+        "script vai fazer parsing automático da sua resposta procurando exatamente essas tags, sem "
+        "markdown, sem emoji nos cabeçalhos, sem texto antes ou depois. As metas de caracteres "
+        "informadas em cada versão do roteiro acima têm PRIORIDADE sobre qualquer meta de caracteres "
+        "mencionada na base de conhecimento — siga sempre as metas definidas aqui."
     )
 
     if not use_cache:
@@ -189,7 +244,15 @@ def main() -> None:
     use_cache = bool(ctx.get("use_cache"))
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
-    message = client.messages.create(
+    system_prompt = build_system_prompt(kb, vencedor[1] if vencedor else None, use_cache)
+    user_content = (
+        f"Transcrição do vídeo de referência (plataforma: {ctx.get('platform') or 'anexo enviado direto'}, "
+        f"link de origem: {ctx.get('source_url') or 'sem link, mídia enviada direto no Telegram'}):\n\n"
+        f"{ctx['transcript']}"
+    )
+    messages = [{"role": "user", "content": user_content}]
+
+    kwargs = dict(
         model=MODEL,
         max_tokens=8192,
         # claude-sonnet-5 roda com "adaptive thinking" ligado por padrão quando esse
@@ -198,16 +261,35 @@ def main() -> None:
         # resposta vazia. Essa tarefa é só formatação seguindo um template, não precisa
         # de raciocínio em múltiplas etapas.
         thinking={"type": "disabled"},
-        system=build_system_prompt(kb, vencedor[1] if vencedor else None, use_cache),
-        messages=[{
-            "role": "user",
-            "content": (
-                f"Transcrição do vídeo de referência (plataforma: {ctx.get('platform') or 'anexo enviado direto'}, "
-                f"link de origem: {ctx.get('source_url') or 'sem link, mídia enviada direto no Telegram'}):\n\n"
-                f"{ctx['transcript']}"
-            ),
-        }],
+        system=system_prompt,
     )
+
+    message = client.messages.create(messages=messages, **kwargs)
+    roteiro_text = "".join(block.text for block in message.content if block.type == "text")
+    parsed = roteiro_parser.parse(roteiro_text)
+    problemas = _fora_da_meta(parsed)
+
+    if problemas:
+        print(f"--- Fora da meta de caracteres, tentando 1x corrigir: {problemas} ---")
+        messages.append({"role": "assistant", "content": roteiro_text})
+        messages.append({"role": "user", "content": (
+            "Sua resposta anterior ficou fora da meta de caracteres exigida:\n"
+            + "\n".join(f"- {p}" for p in problemas)
+            + "\n\nReescreva a resposta INTEIRA (mesmo formato de tags, do zero, "
+            "incluindo CATEGORIA/PILAR/TITULO_CURTO), ajustando o tamanho dessas "
+            "versões pra caber dentro da meta, sem perder o gancho nem virar "
+            "telegráfico demais. Não adicione comentário fora do formato."
+        )})
+        retry_msg = client.messages.create(messages=messages, **kwargs)
+        roteiro_retry = "".join(b.text for b in retry_msg.content if b.type == "text")
+        parsed_retry = roteiro_parser.parse(roteiro_retry)
+        # só troca se a segunda tentativa realmente melhorou o parsing/tamanho;
+        # senão fica com a primeira resposta (parseável) - ter algo é melhor que
+        # arriscar um retry pior.
+        if parsed_retry["versao_mae"] or parsed_retry["versao_rapida"]:
+            roteiro_text = roteiro_retry
+            message = retry_msg
+        print(f"--- Após retry: {_fora_da_meta(parsed_retry) or 'dentro da meta'} ---")
 
     if use_cache:
         print(
@@ -215,7 +297,6 @@ def main() -> None:
             f"tokens, leitura={message.usage.cache_read_input_tokens} tokens ---"
         )
 
-    roteiro_text = "".join(block.text for block in message.content if block.type == "text")
     print(f"--- stop_reason: {message.stop_reason} ---")
     print("--- Resposta bruta da Claude (primeiros 500 chars) ---")
     print(roteiro_text[:500])

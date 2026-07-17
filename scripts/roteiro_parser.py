@@ -1,8 +1,9 @@
 """
 Interpreta o texto que a Claude devolve em generate_script.py, no formato
-combinado (extensão do template Antigravity — ver README): duas linhas de
-metadado (CATEGORIA/PILAR) no topo, seguidas do roteiro no formato de tags
-textuais (TITULOS A/B, HASHTAGS, RECEITA RESUMIDA, ROTEIRO VERSAO-*).
+combinado (extensão do template Antigravity — ver README): linhas de
+metadado (CATEGORIA/PILAR/TITULO_CURTO) no topo, seguidas do roteiro no
+formato de tags textuais (TITULOS A/B, HASHTAGS, INGREDIENTES, MODO DE
+PREPARO, ROTEIRO VERSAO-*).
 
 notion_insert.py usa o dicionário retornado por parse() pra montar as
 propriedades e os blocos da página no Notion.
@@ -12,7 +13,8 @@ import re
 SECTION_ORDER = [
     "TITULOS A/B",
     "HASHTAGS",
-    "RECEITA RESUMIDA",
+    "INGREDIENTES",
+    "MODO DE PREPARO",
     "ROTEIRO VERSAO-MAE",
     "ROTEIRO VERSAO-RAPIDA",
     "ROTEIRO VERSAO-SHORTS",
@@ -24,8 +26,10 @@ def parse(text: str) -> dict:
 
     categoria = _extract_line(text, "CATEGORIA")
     pilar = _extract_line(text, "PILAR")
+    titulo_curto = _extract_line(text, "TITULO_CURTO")
     body = re.sub(r"^CATEGORIA:.*$\n?", "", text, flags=re.M)
-    body = re.sub(r"^PILAR:.*$\n?", "", body, flags=re.M).strip()
+    body = re.sub(r"^PILAR:.*$\n?", "", body, flags=re.M)
+    body = re.sub(r"^TITULO_CURTO:.*$\n?", "", body, flags=re.M).strip()
 
     numero, titulo, rest = _split_title(body)
     sections = _split_sections(rest)
@@ -33,11 +37,13 @@ def parse(text: str) -> dict:
     return {
         "categoria": categoria,
         "pilar": pilar,
+        "titulo_curto": titulo_curto,
         "numero": numero,
         "titulo": titulo,
         "titulos_ab": _parse_titulos_ab(sections.get("TITULOS A/B", "")),
         "hashtags": sections.get("HASHTAGS", "").split(),
-        "receita": _parse_receita(sections.get("RECEITA RESUMIDA", "")),
+        "ingredientes": _parse_lista_com_marcador(sections.get("INGREDIENTES", ""), r"^-\s*"),
+        "preparo_passos": _parse_passos_preparo(sections.get("MODO DE PREPARO", "")),
         "versao_mae": sections.get("ROTEIRO VERSAO-MAE", "").strip(),
         "versao_rapida": sections.get("ROTEIRO VERSAO-RAPIDA", "").strip(),
         "versao_shorts": sections.get("ROTEIRO VERSAO-SHORTS", "").strip(),
@@ -75,8 +81,26 @@ def _parse_titulos_ab(text: str) -> dict:
     return {"a": a.group(1).strip() if a else "", "b": b.group(1).strip() if b else ""}
 
 
-def _parse_receita(text: str) -> dict:
-    lines = text.splitlines()
-    ingredientes = [line.strip()[1:].strip() for line in lines if line.strip().startswith("-")]
-    preparo_lines = [line.strip() for line in lines if line.strip() and not line.strip().startswith("-")]
-    return {"ingredientes": ingredientes, "preparo": " ".join(preparo_lines).strip()}
+def _parse_lista_com_marcador(text: str, marcador_regex: str) -> list[str]:
+    """Extrai itens de uma lista onde cada linha começa com um marcador
+    (ex: '- ' ou '1. '), devolvendo só o conteúdo, na ordem original."""
+    itens = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        m = re.match(marcador_regex, line)
+        if m:
+            itens.append(line[m.end():].strip())
+    return itens
+
+
+def _parse_passos_preparo(text: str) -> list[str]:
+    """Extrai os passos numerados de MODO DE PREPARO. Se a IA não numerou
+    como instruído, cai para um fallback que aproveita cada linha não vazia
+    como um passo — evita perder o conteúdo silenciosamente (mesmo tipo de
+    bug que já mordeu esse pipeline antes: parsing zerado sem aviso)."""
+    passos = _parse_lista_com_marcador(text, r"^\d+\.\s*")
+    if passos:
+        return passos
+    return [line.strip() for line in text.splitlines() if line.strip()]

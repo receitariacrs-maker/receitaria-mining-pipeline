@@ -39,6 +39,23 @@ MAX_BLOCK_LEN = 2000
 ICON_LIST = {"type": "external", "external": {"url": "https://www.notion.so/icons/list_blue.svg"}}
 ICON_EDIT = {"type": "external", "external": {"url": "https://www.notion.so/icons/edit_blue.svg"}}
 
+# Ícone da PÁGINA (não do bloco/callout) por categoria - biblioteca de ícones
+# vetoriais nativa do Notion (mesma família de ICON_LIST/ICON_EDIT), não emoji.
+# Só as URLs abaixo foram confirmadas de verdade (vistas carregando no Notion);
+# categorias sem um ícone temático confirmado caem no ICON_FALLBACK em vez de
+# arriscar uma URL adivinhada (ícone quebrado na página).
+ICON_FALLBACK = ICON_LIST
+ICON_POR_CATEGORIA = {
+    "Dores Articulares": {"type": "external", "external": {"url": "https://www.notion.so/icons/activity_blue.svg"}},
+    "Saúde & Colesterol": {"type": "external", "external": {"url": "https://www.notion.so/icons/heart_blue.svg"}},
+    "Casa & Pragas": {"type": "external", "external": {"url": "https://www.notion.so/icons/home_blue.svg"}},
+    "Saúde Natural": {"type": "external", "external": {"url": "https://www.notion.so/icons/home_gray.svg"}},
+}
+
+
+def icone_para_categoria(categoria: str | None) -> dict:
+    return ICON_POR_CATEGORIA.get(categoria, ICON_FALLBACK)
+
 
 def _headers():
     return {
@@ -147,11 +164,11 @@ def build_children_blocks(parsed: dict, source_url: str | None) -> list:
     if parsed["hashtags"]:
         blocks.append(paragraph_block(" ".join(parsed["hashtags"]), color="gray"))
 
-    receita = parsed["receita"]
-    preparo_children = [to_do_block(ingrediente) for ingrediente in receita["ingredientes"]]
-    if receita["preparo"]:
-        preparo_children.append(paragraph_block(""))  # linha em branco antes do modo de preparo
-        preparo_children.extend(paragraph_block(chunk) for chunk in chunk_text(receita["preparo"]))
+    preparo_children = [to_do_block(ingrediente) for ingrediente in parsed["ingredientes"]]
+    if parsed["preparo_passos"]:
+        if preparo_children:
+            preparo_children.append(paragraph_block(""))  # separador visual ingredientes -> passos
+        preparo_children.extend(to_do_block(passo) for passo in parsed["preparo_passos"])
     blocks.append(build_callout(ICON_LIST, "green_background", "Modo de Preparo", preparo_children))
 
     blocks.append(divider_block())
@@ -169,8 +186,9 @@ def build_children_blocks(parsed: dict, source_url: str | None) -> list:
 
 
 def build_properties(parsed: dict, ctx: dict) -> dict:
+    titulo_pagina = parsed.get("titulo_curto") or parsed.get("titulo") or "Roteiro minerado"
     properties = {
-        TITLE_PROP: {"title": [{"text": {"content": parsed["titulo"] or "Roteiro minerado"}}]},
+        TITLE_PROP: {"title": [{"text": {"content": titulo_pagina}}]},
         STATUS_PROP: {"status": {"name": STATUS_DEFAULT_OPTION}},
     }
     if parsed.get("numero"):
@@ -200,6 +218,7 @@ def create_page(ctx: dict) -> str:
         headers=_headers(),
         json={
             "parent": {"database_id": DATABASE_ID},
+            "icon": icone_para_categoria(parsed.get("categoria")),
             "properties": build_properties(parsed, ctx),
             "children": build_children_blocks(parsed, ctx.get("source_url")),
         },
