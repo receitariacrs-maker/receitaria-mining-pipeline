@@ -147,6 +147,14 @@ def build_system_prompt(kb: str, vencedor_nome: str | None) -> str:
         + instrucoes_reciclagem
         + "\n\n" + FORMATO_SAIDA.format(categorias=", ".join(CATEGORIAS), pilares=", ".join(PILARES))
         + "\n\n" + kb
+        + "\n\n⚠️ ATENÇÃO — CONFLITO DE FORMATO: a base de conhecimento acima tem uma seção "
+        "'FORMATO DE ENTREGA OBRIGATÓRIO' (com blocos 📊 ANÁLISE, 🔴🟠🟡 ROTEIRO) pensada pra "
+        "colar manualmente no agente Cowork — NÃO é o formato que você deve usar aqui. Aqui, "
+        "IGNORE COMPLETAMENTE aquela seção e use EXCLUSIVAMENTE o formato de tags de texto puro "
+        "definido acima (CATEGORIA:, PILAR:, TITULOS A/B, HASHTAGS, RECEITA RESUMIDA, ROTEIRO "
+        "VERSAO-MAE, ROTEIRO VERSAO-RAPIDA, ROTEIRO VERSAO-SHORTS) — um script vai fazer parsing "
+        "automático da sua resposta procurando exatamente essas tags, sem markdown, sem emoji nos "
+        "cabeçalhos, sem texto antes ou depois."
     )
 
 
@@ -171,6 +179,9 @@ def main() -> None:
     )
 
     roteiro_text = "".join(block.text for block in message.content if block.type == "text")
+    print("--- Resposta bruta da Claude (primeiros 500 chars) ---")
+    print(roteiro_text[:500])
+    print("--- fim do trecho ---")
     context.update(
         roteiro=roteiro_text,
         vencedor_relacionado_id=vencedor[0] if vencedor else None,

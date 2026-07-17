@@ -173,6 +173,13 @@ def build_properties(parsed: dict, ctx: dict) -> dict:
 
 def create_page(ctx: dict) -> str:
     parsed = roteiro_parser.parse(ctx["roteiro"])
+    if not parsed["titulo"] and not parsed["versao_mae"]:
+        raise RuntimeError(
+            "O roteiro que a Claude devolveu não bateu com o formato esperado (parsing "
+            "ficou tudo vazio) - a IA deve ter seguido outro formato em vez das tags de "
+            "texto puro. Card não foi criado vazio de propósito; veja o log do passo "
+            "'Gerar roteiro (Anthropic)' pra checar a resposta bruta."
+        )
     resp = requests.post(
         f"{NOTION_API}/pages",
         headers=_headers(),
