@@ -161,6 +161,17 @@ def build_children_blocks(parsed: dict, source_url: str | None) -> list:
         paragraph_block(f"B: {titulos['b']}"),
     ]))
 
+    gancho = parsed.get("analise_gancho") or {}
+    if gancho.get("familia_gancho"):
+        blocks.append(build_callout(ICON_EDIT, "gray_background", "Análise do Gancho (QA)", [
+            paragraph_block(f"Família: {gancho.get('familia_gancho') or '-'}"),
+            paragraph_block(f"Gancho original (referência): {gancho.get('gancho_original') or '-'}"),
+            paragraph_block(f"Ingrediente-âncora: {gancho.get('ingrediente_ancora') or '-'}"),
+            paragraph_block(f"Promessa: {gancho.get('promessa') or '-'}"),
+            paragraph_block(f"Gatilho: {gancho.get('gatilho') or '-'}"),
+            paragraph_block(f"Ajuste de veracidade: {gancho.get('ajuste_veracidade') or '-'}"),
+        ]))
+
     if parsed["hashtags"]:
         blocks.append(paragraph_block(" ".join(parsed["hashtags"]), color="gray"))
 

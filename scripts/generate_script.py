@@ -44,6 +44,15 @@ CATEGORIAS = [
 ]
 PILARES = ["Limpeza doméstica", "Remédio caseiro", "Reciclagem", "Experimental"]
 
+FAMILIAS_GANCHO = [
+    'Curiosidade ("Você sabia que...")',
+    'Comando direto / pattern interrupt ("Jogue/Coloque/Misture X no Y")',
+    'Promessa absoluta ("[Ação] e nunca mais [dor]")',
+    'Autoridade folk ("Minha avó/senhor da roça ensinou")',
+    'Testemunho pessoal com número ("Misturei X e [resultado] há N anos")',
+    'Tabu / anti-estabelecimento ("Pare de [hábito comum]")',
+]
+
 FORMATO_SAIDA = """
 Responda EXATAMENTE nesse formato de tags textuais (sem markdown extra, sem
 explicações antes ou depois):
@@ -62,13 +71,24 @@ HASHTAGS
 #[tag1] #[tag2] #[tag3] #[tag4]
 
 INGREDIENTES
-- [Ingrediente 1]
-- [Ingrediente 2]
+- [Quantidade] [Ingrediente 1]
+- [Quantidade] [Ingrediente 2]
 
 MODO DE PREPARO
 1. [Primeiro passo, curto e direto]
 2. [Segundo passo]
 3. [Passo final / como usar]
+
+ANALISE_GANCHO
+Antes de escrever os roteiros, preencha esse bloco de análise — é seu
+raciocínio estruturado sobre o gancho do vídeo de referência, e deve guiar
+as 3 versões abaixo.
+FAMILIA_GANCHO: [uma das opções: {familias_gancho}]
+GANCHO_ORIGINAL: [resumo de até ~15 palavras da ideia central do gancho do vídeo de referência - não copie a frase literal]
+INGREDIENTE_ANCORA: [o ingrediente/elemento central que ancora a promessa]
+PROMESSA: [o resultado/benefício que o gancho vende - nunca a receita/quantidade de ingredientes]
+GATILHO: [o gatilho psicológico: curiosidade, urgência, autoridade, prova social, tabu, etc.]
+AJUSTE_VERACIDADE: [o que precisou ser ajustado, se algo, pra o gancho original ficar verídico - ou "nenhum, gancho original já era verídico"]
 
 ROTEIRO VERSAO-MAE
 [0-10s - Gancho]
@@ -100,7 +120,11 @@ perceber que vai fechar abaixo de 3.500 caracteres, ANTES de finalizar volte
 e desenvolva mais cada bloco (mais detalhe de aplicação, mais explicação do
 porquê funciona, mais contexto/história), em vez de simplesmente encerrar
 cedo. É uma versão longa de propósito — trate os placeholders do exemplo como
-o mínimo de blocos, não o máximo.
+o mínimo de blocos, não o máximo. ATENÇÃO: essa meta de caracteres NUNCA deve
+ser buscada alongando o gancho/primeira frase — se precisar de mais volume
+pra bater a meta, desenvolva os blocos de contexto/explicação do porquê
+funciona/passo a passo com mais detalhe, nunca a frase de abertura (que
+precisa continuar curta e de impacto, ver "Regras adicionais" abaixo).
 
 ROTEIRO VERSAO-RAPIDA
 [0-3s - Gancho]
@@ -131,8 +155,11 @@ Regras adicionais:
   entre parênteses, ex: "Óleo de Alecrim Anticaspa (Cabelo & Fios)" — não
   precisa listar todos os ingredientes literalmente, só comunicar o tema em
   poucas palavras.
-- Em INGREDIENTES, cada linha começa com "- " e traz só o item (sem
-  quantidade obrigatória, pode incluir se for curto).
+- Em INGREDIENTES, cada linha começa com "- " e traz a quantidade JUNTO com o
+  item, ex: "- 2 colheres de sopa de mel" — quantidade é obrigatória em cada
+  item (é a lista prática que o usuário usa pra separar tudo antes de
+  gravar); se a transcrição de referência não disser a quantidade exata,
+  estime uma quantidade razoável em vez de omitir.
 - Em MODO DE PREPARO, cada linha começa com "N. " (número sequencial) e é um
   passo curto e imperativo — não escreva parágrafo corrido.
 - Não numere nada além do [Número] no título. Não use emoji em cabeçalho,
@@ -142,14 +169,57 @@ Regras adicionais:
   texto curto demais, principalmente na VERSAO-MAE. Antes de finalizar cada
   versão, conte mentalmente se já bateu a meta mínima — se não bateu,
   desenvolva mais em vez de encerrar.
+- PRESERVAÇÃO DO GANCHO (a regra mais importante sobre o gancho): não troque
+  a estrutura/intensidade do gancho do vídeo de referência (ver abertura
+  literal fornecida na mensagem do usuário) por algo genérico. Se o gancho
+  original fizer uma alegação falsa ou exagerada sobre um ingrediente
+  específico, mantenha a MESMA estrutura de frase e o MESMO nível de
+  impacto — troque só o elemento falso por um ingrediente/mecanismo real que
+  sustente uma promessa parecida ("mais leve" o suficiente pra ser
+  verdadeiro, nunca watered-down genérico). Modificação radical do gancho só
+  se o restante do roteiro (passo a passo, ingredientes reais) não sustentar
+  mais a promessa original de jeito nenhum.
+- Regra anti-spoiler do gancho: o gancho vende o RESULTADO, nunca a receita —
+  proibido revelar quantidade de ingredientes ou estrutura do passo a passo
+  na frase de abertura (ex: proibido "quatro ingredientes que...", "três
+  coisas simples...").
+- Mesma família de gancho nos 3 formatos: VERSAO-MAE, VERSAO-RAPIDA e
+  VERSAO-SHORTS compartilham a MESMA família de gancho (ver FAMILIA_GANCHO
+  em ANALISE_GANCHO) e a mesma ideia central — só o tamanho muda. Proibido a
+  mãe usar uma família (ex: autoridade folk) e o shorts usar outra (ex:
+  comando direto).
+- Orçamento de palavras do gancho: a primeira frase falada de cada versão
+  deve ser curta e de altíssimo impacto — até ~10 palavras na mãe, ~10-12 na
+  rápida, ~6-8 no shorts. Nunca mais longo que isso.
+- Ponte gancho → contexto: logo após o gancho curto, o bloco de
+  Contexto/História deve conectar com autoridade/origem (quem ensinou, há
+  quanto tempo, uma pequena história pessoal) antes de entrar na explicação
+  técnica ou no passo a passo — não pule do gancho direto pra explicação.
+- Erro comum a evitar (proibido): NUNCA abra com uma cena/anedota longa
+  contando como você "descobriu" o truque (ex: "Descobri isso por acaso,
+  quando fui trocar o lençol num domingo de manhã e vi que o colchão tinha
+  ficado todo amarelado..."). Isso é sempre genérico, alonga o gancho e
+  ignora a ideia central do vídeo de referência. Abra DIRETO com o
+  resultado/promessa, no mesmo estilo do gancho original — ex: se o gancho de
+  referência é "Depois que aprendi esse truque meu colchão fica sempre
+  branquinho e perfumado", a abertura adaptada continua sendo resultado
+  direto ("Meu colchão fica branquinho e perfumado com um truque só"), nunca
+  uma cena de descoberta contada em detalhe. A cena/anedota, se fizer
+  sentido, entra no bloco de Contexto/História (depois do gancho), nunca
+  antes ou misturada nele.
 """.strip()
 
 LIMITE_MAE = (3600, 3700)
 LIMITE_RAPIDA = (1200, 1300)
 LIMITE_SHORTS = (500, 600)
 
-
-_MARCADOR_COLCHETES_RE = re.compile(r"\[[^\]]*\]")
+# Tetos soltos (só teto, nunca piso) pra quantas palavras a primeira frase
+# falada de cada versão pode ter - contar palavra em português tem margem de
+# erro (contrações, aspas), por isso a folga em relação à meta "ideal" da KB
+# (~10/~10-12/~6-8) que fica só no texto do prompt, não na validação.
+HOOK_LIMITE_MAE_PALAVRAS = 14
+HOOK_LIMITE_RAPIDA_PALAVRAS = 14
+HOOK_LIMITE_SHORTS_PALAVRAS = 10
 
 
 def _tamanho_falado(texto: str) -> int:
@@ -161,11 +231,31 @@ def _tamanho_falado(texto: str) -> int:
     entram na contagem que valida a meta de caracteres."""
     linhas = []
     for l in texto.splitlines():
-        l = _MARCADOR_COLCHETES_RE.sub("", l).strip()
+        l = roteiro_parser.MARCADOR_COLCHETES_RE.sub("", l).strip()
         if not l or l.lower().startswith("meta de caracteres"):
             continue
         linhas.append(l)
     return len(" ".join(linhas))
+
+
+def _extrair_abertura_referencia(transcript: str, max_palavras: int = 40) -> str:
+    """Pega literalmente as 2 primeiras frases da transcrição de referência
+    (o gancho de verdade que já funcionou nesse vídeo) pra destacar na
+    mensagem do usuário — em vez de confiar que a IA vai localizar sozinha o
+    gancho dentro de uma transcrição longa. Texto literal, sem reescrever.
+    Nunca lança exceção: sem pontuação detectável, cai pro corte por palavra;
+    transcrição vazia devolve string vazia."""
+    transcript = (transcript or "").strip()
+    if not transcript:
+        return ""
+    frases = re.split(r"(?<=[.!?])\s+", transcript, maxsplit=2)
+    abertura = " ".join(frases[:2]).strip()
+    if not abertura:
+        abertura = transcript
+    palavras = abertura.split()
+    if len(palavras) > max_palavras:
+        abertura = " ".join(palavras[:max_palavras]) + "..."
+    return abertura
 
 
 def _fora_da_meta(parsed: dict) -> list[str]:
@@ -179,6 +269,20 @@ def _fora_da_meta(parsed: dict) -> list[str]:
     tam_shorts = _tamanho_falado(parsed["versao_shorts"])
     if not (LIMITE_SHORTS[0] <= tam_shorts <= LIMITE_SHORTS[1]):
         problemas.append(f"VERSAO-SHORTS tem {tam_shorts} caracteres (meta: {LIMITE_SHORTS[0]}-{LIMITE_SHORTS[1]}).")
+
+    if parsed["versao_mae"]:
+        n = len(roteiro_parser.primeira_frase_falada(parsed["versao_mae"]).split())
+        if n > HOOK_LIMITE_MAE_PALAVRAS:
+            problemas.append(f"Gancho da VERSAO-MAE tem {n} palavras (meta: até {HOOK_LIMITE_MAE_PALAVRAS}) - primeira frase muito longa/genérica, encurte.")
+    if parsed["versao_rapida"]:
+        n = len(roteiro_parser.primeira_frase_falada(parsed["versao_rapida"]).split())
+        if n > HOOK_LIMITE_RAPIDA_PALAVRAS:
+            problemas.append(f"Gancho da VERSAO-RAPIDA tem {n} palavras (meta: até {HOOK_LIMITE_RAPIDA_PALAVRAS}) - primeira frase muito longa/genérica, encurte.")
+    if parsed["versao_shorts"]:
+        n = len(roteiro_parser.primeira_linha_shorts(parsed["versao_shorts"]).split())
+        if n > HOOK_LIMITE_SHORTS_PALAVRAS:
+            problemas.append(f"Gancho da VERSAO-SHORTS tem {n} palavras (meta: até {HOOK_LIMITE_SHORTS_PALAVRAS}) - frase de impacto muito longa, encurte.")
+
     return problemas
 
 
@@ -250,7 +354,11 @@ def build_system_prompt(kb: str, vencedor_nome: str | None, use_cache: bool):
         "fornecer. Não copie a transcrição literalmente — adapte pro formato e gancho de "
         "vídeo curto, respeitando as regras de linguagem/compliance do documento (evitar "
         "termos clínicos e frases de watchbait)."
-        + "\n\n" + FORMATO_SAIDA.format(categorias=", ".join(CATEGORIAS), pilares=", ".join(PILARES))
+        + "\n\n" + FORMATO_SAIDA.format(
+            categorias=", ".join(CATEGORIAS),
+            pilares=", ".join(PILARES),
+            familias_gancho=", ".join(FAMILIAS_GANCHO),
+        )
         + "\n\n" + kb
         + "\n\n⚠️ ATENÇÃO — CONFLITO DE FORMATO: a base de conhecimento acima tem uma seção "
         "'FORMATO DE ENTREGA OBRIGATÓRIO' (com blocos 📊 ANÁLISE, 🔴🟠🟡 ROTEIRO) pensada pra "
@@ -285,8 +393,18 @@ def main() -> None:
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
     system_prompt = build_system_prompt(kb, vencedor[1] if vencedor else None, use_cache)
+    abertura_referencia = _extrair_abertura_referencia(ctx["transcript"])
     user_content = (
-        f"Transcrição do vídeo de referência (plataforma: {ctx.get('platform') or 'anexo enviado direto'}, "
+        (
+            f'Abertura literal da transcrição do vídeo de referência — o gancho que já '
+            f'funcionou nesse vídeo. Preserve ao MÁXIMO a estrutura e a intensidade dessa '
+            f'abertura. NÃO copie a frase literal e NÃO troque por um gancho genérico — só '
+            f'ajuste se a alegação for falsa/exagerada, e nesse caso troque apenas o elemento '
+            f'falso (ex: o ingrediente) por algo real de eficácia comparável, mantendo o resto '
+            f'da estrutura e o impacto:\n\n"{abertura_referencia}"\n\n'
+            if abertura_referencia else ""
+        )
+        + f"Transcrição completa do vídeo de referência (plataforma: {ctx.get('platform') or 'anexo enviado direto'}, "
         f"link de origem: {ctx.get('source_url') or 'sem link, mídia enviada direto no Telegram'}):\n\n"
         f"{ctx['transcript']}"
     )
@@ -310,15 +428,17 @@ def main() -> None:
     problemas = _fora_da_meta(parsed)
 
     if problemas:
-        print(f"--- Fora da meta de caracteres, tentando 1x corrigir: {problemas} ---")
+        print(f"--- Fora da meta (tamanho e/ou gancho), tentando 1x corrigir: {problemas} ---")
         messages.append({"role": "assistant", "content": roteiro_text})
         messages.append({"role": "user", "content": (
-            "Sua resposta anterior ficou fora da meta de caracteres exigida:\n"
+            "Sua resposta anterior ficou fora da meta exigida:\n"
             + "\n".join(f"- {p}" for p in problemas)
             + "\n\nReescreva a resposta INTEIRA (mesmo formato de tags, do zero, "
-            "incluindo CATEGORIA/PILAR/TITULO_CURTO), ajustando o tamanho dessas "
-            "versões pra caber dentro da meta, sem perder o gancho nem virar "
-            "telegráfico demais. Não adicione comentário fora do formato."
+            "incluindo CATEGORIA/PILAR/TITULO_CURTO e ANALISE_GANCHO), ajustando "
+            "o que estiver fora da meta. Se o problema for de gancho longo demais, "
+            "encurte a primeira frase mantendo a mesma ideia/estrutura do gancho "
+            "original — não vire telegráfico nem troque por algo genérico. Não "
+            "adicione comentário fora do formato."
         )})
         retry_msg = client.messages.create(messages=messages, **kwargs)
         roteiro_retry = "".join(b.text for b in retry_msg.content if b.type == "text")
