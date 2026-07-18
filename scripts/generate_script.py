@@ -149,6 +149,10 @@ ROTEIRO VERSAO-SHORTS
 - 18-30s: "[Chamada de ação direta]"
 Meta de caracteres desta versão: entre 500 e 600 caracteres de texto falado
 (não conte os marcadores de tempo entre colchetes) — uns 85-100 palavras.
+Mesmo aviso das versões anteriores: essa é a que mais costuma sair curta
+demais na prática — use os 5 benefícios (não 3) na linha do meio, com frases
+completas em vez de fragmentos telegráficos, pra bater a meta em vez de
+ficar abaixo dela.
 
 Regras adicionais:
 - TITULO_CURTO deve ser um mini-título autoexplicativo seguido da categoria
@@ -435,10 +439,15 @@ def main() -> None:
             + "\n".join(f"- {p}" for p in problemas)
             + "\n\nReescreva a resposta INTEIRA (mesmo formato de tags, do zero, "
             "incluindo CATEGORIA/PILAR/TITULO_CURTO e ANALISE_GANCHO), ajustando "
-            "o que estiver fora da meta. Se o problema for de gancho longo demais, "
-            "encurte a primeira frase mantendo a mesma ideia/estrutura do gancho "
-            "original — não vire telegráfico nem troque por algo genérico. Não "
-            "adicione comentário fora do formato."
+            "o que estiver fora da meta. Se a versão ficou curta, o déficit de "
+            "caracteres acima é literal — não é 'quase lá', desenvolva de verdade "
+            "mais frases nos blocos de contexto/explicação do porquê funciona/"
+            "passo a passo (mais detalhe de aplicação, mais exemplos, mais "
+            "explicação), NUNCA encurtando ainda mais o gancho pra compensar. Se o "
+            "problema for de gancho longo demais, encurte só a primeira frase "
+            "mantendo a mesma ideia/estrutura do gancho original — não vire "
+            "telegráfico nem troque por algo genérico. Não adicione comentário "
+            "fora do formato."
         )})
         retry_msg = client.messages.create(messages=messages, **kwargs)
         roteiro_retry = "".join(b.text for b in retry_msg.content if b.type == "text")
