@@ -7,6 +7,11 @@ on:
     # cobre o caso raro de algo ficar preso na fila (ver scripts/queue_flush.py)
     - cron: "*/30 * * * *"
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Ignorar a espera de 15 min e disparar o que estiver na fila agora"
+        type: boolean
+        default: false
 
 concurrency:
   group: queue-flush
@@ -31,4 +36,5 @@ jobs:
           GIST_ID: ${{ secrets.GIST_ID }}
           GH_DISPATCH_TOKEN: ${{ secrets.GH_DISPATCH_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          FORCE_FLUSH: ${{ github.event.inputs.force }}
         run: python queue_flush.py

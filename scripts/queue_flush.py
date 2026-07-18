@@ -14,6 +14,11 @@ mesmo Gist de estado que o Worker usa e completa o que ficou preso:
   BATCH_MAX_WAIT_SECONDS, dispara mesmo assim (o Worker já devia ter feito
   isso sozinho ao passar os 15 min - isso aqui só cobre o cenário raro de o
   Worker ter caído ou o Cloudflare ter tido algum problema nesse meio tempo).
+
+Rodar manual (aba Actions -> Queue Flush (fallback) -> Run workflow) com a
+opção "force" marcada ignora a espera de 15 min e dispara na hora o que
+estiver na fila, mesmo que tenha acabado de entrar - útil pra testar sem
+esperar.
 """
 import os
 import time
@@ -28,6 +33,7 @@ GITHUB_REPOSITORY = os.environ["GITHUB_REPOSITORY"]
 DISPATCH_URL = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/dispatches"
 
 BATCH_MAX_WAIT_SECONDS = 15 * 60
+FORCE = os.environ.get("FORCE_FLUSH", "").lower() == "true"
 
 
 def dispatch_event(client_payload: dict) -> None:
@@ -49,10 +55,12 @@ def main() -> None:
         return
 
     esperando_ha_muito = (time.time() - queued_since) >= BATCH_MAX_WAIT_SECONDS
-    if not esperando_ha_muito:
+    if not (esperando_ha_muito or FORCE):
+        print(f"--- Fila com {len(queue)} item(ns), ainda dentro dos 15 min - nada a fazer. ---")
         return
 
-    print(f"--- Fila presa há mais de 15 min ({len(queue)} item(ns)) - o Worker não flushou sozinho. Disparando. ---")
+    motivo = "disparo forçado manualmente" if FORCE and not esperando_ha_muito else "fila presa há mais de 15 min"
+    print(f"--- {motivo} ({len(queue)} item(ns)). Disparando. ---")
 
     use_cache = len(queue) > 1
     lote_id = uuid.uuid4().hex if use_cache else None
