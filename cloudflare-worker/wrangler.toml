@@ -2,6 +2,10 @@ name = "receitaria-telegram-webhook"
 main = "worker.js"
 compatibility_date = "2026-01-01"
 
+[triggers]
+crons = ["0 6 * * *"]  # 03:00 BRT (UTC-3) todo dia - limpa as mensagens do bot,
+                        # sempre bem dentro do limite de 48h do deleteMessage do Telegram
+
 # Secrets (NÃO vão aqui - configure via `wrangler secret put NOME` ou pelo
 # painel do Cloudflare, em Settings > Variables and Secrets, tipo "Secret"):
 #   TELEGRAM_BOT_TOKEN

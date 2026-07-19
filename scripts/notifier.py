@@ -21,7 +21,15 @@ def _send(text: str) -> None:
     rotulo = ctx.get("rotulo")
     if rotulo:
         text = f"🏷️ {rotulo}\n{text}"
-    requests.post(f"{TELEGRAM_API}/sendMessage", json={"chat_id": chat_id, "text": text}, timeout=15)
+    resp = requests.post(f"{TELEGRAM_API}/sendMessage", json={"chat_id": chat_id, "text": text}, timeout=15)
+    # acumula o message_id localmente (run_context.json) - lote_tracker.py
+    # despeja essa lista no Gist compartilhado no fim do job, pra "/limpar" e
+    # o cron diário do Worker saberem depois o que apagar.
+    message_id = resp.json().get("result", {}).get("message_id")
+    if message_id is not None:
+        ids = ctx.get("sent_message_ids", [])
+        ids.append(message_id)
+        context.update(sent_message_ids=ids)
 
 
 def start(mensagem: str) -> None:

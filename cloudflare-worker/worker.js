@@ -20,6 +20,21 @@
  *                              webhook do bot (key = WEBHOOK_SETUP_SECRET)
  *   GET  /health             - checagem simples
  *
+ * Comandos reconhecidos no chat (além de link/mídia):
+ *   "forçar"/"força"/"fazer agora"/"processar agora"/"/forcar" - dispara
+ *     imediatamente tudo que estiver em pending_queue, ignorando o threshold
+ *     de BATCH_TRIGGER e a espera de BATCH_MAX_WAIT_SECONDS.
+ *   "limpar"/"/limpar"/"/clear" - apaga (via deleteMessage) todas as
+ *     mensagens que o bot mandou e que ainda estão rastreadas em
+ *     state.sent_message_ids. Só apaga mensagens do bot - o Telegram não
+ *     deixa um bot apagar mensagens que o próprio usuário mandou num chat
+ *     privado.
+ *
+ * Cron Trigger (scheduled, configurado em wrangler.toml): roda 1x por dia e
+ * faz a mesma limpeza do "/limpar", silenciosamente. Existe porque a API do
+ * Telegram só deixa apagar mensagens com menos de 48h - rodando a cada 24h
+ * nunca deixa nada "preso" sem poder ser apagado depois.
+ *
  * Secrets esperados (via `wrangler secret put` ou painel do Cloudflare):
  *   TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USER_ID, GH_DISPATCH_TOKEN,
  *   GITHUB_REPOSITORY (ex: "receitariacrs-maker/receitaria-mining-pipeline"),
@@ -98,11 +113,89 @@ async function dispatchEvent(env, clientPayload) {
 }
 
 async function sendTelegramMessage(env, chatId, text) {
-  await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+  const resp = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: chatId, text }),
   });
+  const data = await resp.json();
+  return data.result?.message_id ?? null;
+}
+
+/** Empilha o message_id em state.sent_message_ids, pra "/limpar" e o cron
+ * diário saberem depois o que apagar. Chamar sempre que sendTelegramMessage
+ * for usado com `state` em escopo. */
+function trackMessage(state, messageId) {
+  if (messageId == null) return;
+  if (!state.sent_message_ids) state.sent_message_ids = [];
+  state.sent_message_ids.push(messageId);
+}
+
+async function deleteTrackedMessages(env, state, chatId) {
+  const ids = state.sent_message_ids || [];
+  let deleted = 0;
+  for (const messageId of ids) {
+    try {
+      const resp = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/deleteMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
+      });
+      const data = await resp.json();
+      if (data.ok) deleted += 1;
+    } catch (err) {
+      // mensagem com mais de 48h, já apagada, etc. - segue pras próximas
+      console.error("falha ao apagar mensagem", messageId, err);
+    }
+  }
+  state.sent_message_ids = [];
+  return deleted;
+}
+
+function normalizeText(text) {
+  return (text || "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
+function isForceCommand(text) {
+  const normalized = normalizeText(text);
+  if (!normalized) return false;
+  return (
+    normalized === "/forcar" ||
+    /\bforc/.test(normalized) ||
+    /\bfazer\s+agora\b/.test(normalized) ||
+    /\bprocessar\s+agora\b/.test(normalized)
+  );
+}
+
+function isClearCommand(text) {
+  const normalized = normalizeText(text);
+  if (!normalized) return false;
+  return normalized === "/clear" || normalized === "/limpar" || /\blimpar\b/.test(normalized);
+}
+
+/** Dispara tudo que está em state.pending_queue agora, sem checar threshold
+ * nem tempo de espera. Reaproveitado pelo gatilho automático (7 vídeos / 15
+ * min) e pelo comando de forçar. Muta `state` (zera a fila, monta lote_atual
+ * se for mais de 1 vídeo) e dispara os eventos - não manda mensagem nem
+ * salva o estado, isso fica por conta de quem chamar.*/
+async function dispatchQueue(env, state) {
+  const queue = state.pending_queue || [];
+  const useCache = queue.length > 1;
+  const loteId = useCache ? crypto.randomUUID() : null;
+  if (loteId) {
+    state.lote_atual = { id: loteId, total: queue.length, concluidos: 0, chat_id: queue[0].chat_id };
+  }
+  for (const item of queue) {
+    item.use_cache = useCache;
+    if (loteId) item.lote_id = loteId;
+    await dispatchEvent(env, item);
+  }
+  state.pending_queue = [];
+  state.pending_queue_since = null;
 }
 
 /** Mesma decisão do handle_message() do telegram_poll.py. */
@@ -164,6 +257,37 @@ async function handleTelegramWebhook(request, env) {
     return new Response("ok"); // ignora qualquer um que não seja você
   }
 
+  const chatId = message.chat.id;
+
+  if (isClearCommand(message.text)) {
+    const state = await loadState(env);
+    const deleted = await deleteTrackedMessages(env, state, chatId);
+    const confirmId = await sendTelegramMessage(env, chatId, `🧹 Limpei ${deleted} mensagem(ns).`);
+    trackMessage(state, confirmId);
+    await saveState(env, state);
+    return new Response("ok");
+  }
+
+  if (isForceCommand(message.text)) {
+    const state = await loadState(env);
+    const queue = state.pending_queue || [];
+    if (queue.length === 0) {
+      const msgId = await sendTelegramMessage(env, chatId, "📭 Fila vazia, nada para processar agora.");
+      trackMessage(state, msgId);
+      await saveState(env, state);
+      return new Response("ok");
+    }
+    const msgId = await sendTelegramMessage(
+      env,
+      chatId,
+      `⚡ Forçando o processamento de ${queue.length} vídeo(s) agora.`
+    );
+    trackMessage(state, msgId);
+    await dispatchQueue(env, state);
+    await saveState(env, state);
+    return new Response("ok");
+  }
+
   const payload = await handleMessage(env, message);
   console.log("payload calculado:", JSON.stringify(payload));
   if (!payload) return new Response("ok");
@@ -178,41 +302,43 @@ async function handleTelegramWebhook(request, env) {
   const esperandoHaMuito =
     queuedSince != null && Date.now() / 1000 - queuedSince >= BATCH_MAX_WAIT_SECONDS;
 
+  state.pending_queue = queue;
+  state.pending_queue_since = queuedSince;
+
   if (queue.length >= BATCH_TRIGGER || esperandoHaMuito) {
     // aviso imediato de "recebi, vou processar já" pro lote que está saindo agora
-    await sendTelegramMessage(
+    const msgId = await sendTelegramMessage(
       env,
       payload.chat_id,
       `📥 Recebi! Disparando o processamento de ${queue.length} vídeo(s) agora.`
     );
-    const useCache = queue.length > 1;
-    const loteId = useCache ? crypto.randomUUID() : null;
-    if (loteId) {
-      state.lote_atual = { id: loteId, total: queue.length, concluidos: 0, chat_id: queue[0].chat_id };
-    }
-    for (const item of queue) {
-      item.use_cache = useCache;
-      if (loteId) item.lote_id = loteId;
-      await dispatchEvent(env, item);
-    }
-    state.pending_queue = [];
-    state.pending_queue_since = null;
+    trackMessage(state, msgId);
+    await dispatchQueue(env, state);
   } else {
     // ainda não bateu o gatilho - avisa que recebeu mas vai esperar, pra não
     // parecer que sumiu no vácuo (o problema original que motivou essa mudança)
     const faltam = BATCH_TRIGGER - queue.length;
-    await sendTelegramMessage(
+    const msgId = await sendTelegramMessage(
       env,
       payload.chat_id,
       `📥 Recebi! Na fila (${queue.length}/${BATCH_TRIGGER}). Processo assim que chegar mais ${faltam} vídeo(s) ou em até 15 min.`
     );
-    state.pending_queue = queue;
-    state.pending_queue_since = queuedSince;
+    trackMessage(state, msgId);
   }
 
   await saveState(env, state);
   console.log("estado salvo no Gist com sucesso, fila agora:", JSON.stringify(state.pending_queue));
   return new Response("ok");
+}
+
+/** Rodada pelo Cron Trigger diário (ver scheduled() abaixo e wrangler.toml).
+ * Mesma limpeza do comando "/limpar", mas silenciosa - não manda mensagem de
+ * confirmação, senão a limpeza automática reintroduziria o ruído que ela
+ * existe pra reduzir. */
+async function handleScheduledCleanup(env) {
+  const state = await loadState(env);
+  await deleteTrackedMessages(env, state, env.TELEGRAM_ALLOWED_USER_ID);
+  await saveState(env, state);
 }
 
 async function handleSetupWebhook(request, env, url) {
@@ -252,5 +378,9 @@ export default {
     }
 
     return new Response("not found", { status: 404 });
+  },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(handleScheduledCleanup(env));
   },
 };
