@@ -1,9 +1,16 @@
 """
-Terceiro passo. Busca a base de conhecimento (SISTEMA_VIRAL_RECEITARIA.md e
-BANCO_VIRAIS_RECEITARIA.md) de um Gist privado — não fica commitada nesse
+Terceiro passo. Busca a base de conhecimento condensada do pipeline
+(SISTEMA_VIRAL_PIPELINE.md) de um Gist privado — não fica commitada nesse
 repositório público — e chama a API da Anthropic pra gerar o roteiro, no
 formato estruturado que o notion_insert.py sabe montar em blocos ricos (ver
 scripts/roteiro_parser.py).
+
+Decisões de custo (jul/2026): a KB embutida é a versão pipeline (~21k chars),
+não mais SISTEMA+BANCO completos (~175k chars) — entrada caiu de ~78k pra
+~15k tokens por chamada. E NÃO existe retry: o prompt usa contrato estrutural
+(4 frases por ingrediente) + overshoot de tamanho pra acertar de primeira;
+qualquer desvio vira aviso de QA visível (log/Notion/Telegram), nunca segunda
+chamada.
 
 Antes de gerar, confere se o link de origem já é um vencedor conhecido (base
 "Banco de Vencedores Próprios") — se for, o roteiro é forçosamente um caso de
@@ -33,8 +40,12 @@ NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 VENCEDORES_DATABASE_ID = os.environ.get("VENCEDORES_DATABASE_ID")
 VENCEDORES_LINK_PROP = "Link"  # nome da propriedade de link na base "Banco de Vencedores Próprios"
 
-SISTEMA_FILENAME = "SISTEMA_VIRAL_RECEITARIA.md"
-BANCO_FILENAME = "BANCO_VIRAIS_RECEITARIA.md"
+# Versão condensada da KB feita sob medida pro pipeline (~21k chars vs ~175k
+# da dupla SISTEMA+BANCO completa) - é o que derrubou o custo de entrada de
+# ~78k pra ~15k tokens por chamada. O documento-mestre continua sendo o
+# SISTEMA_VIRAL_RECEITARIA.md (uso manual no Cowork); se a metodologia mudar
+# lá, regenerar o arquivo pipeline e subir pro mesmo Gist.
+PIPELINE_FILENAME = "SISTEMA_VIRAL_PIPELINE.md"
 
 MODEL = "claude-sonnet-5"
 
@@ -91,68 +102,81 @@ GATILHO: [o gatilho psicológico: curiosidade, urgência, autoridade, prova soci
 AJUSTE_VERACIDADE: [o que precisou ser ajustado, se algo, pra o gancho original ficar verídico - ou "nenhum, gancho original já era verídico"]
 
 ROTEIRO VERSAO-MAE
-[0-10s - Gancho]
-[Texto falado, 2 a 4 frases completas — não uma linha solta.]
+[0-10s - Gancho + Micro-promessa]
+[Texto falado, 2 a 4 frases completas — não uma linha solta. Família do
+gancho de referência + combinação inusitada + número específico + promessa.]
 
-[10-25s - Contexto/História]
-[Continuação, 2 a 4 frases completas.]
+[10-25s - Começa a Receita JÁ (primeiro ingrediente)]
+[2 a 4 frases: primeiro ingrediente na mão e o preparo começando de verdade.
+NUNCA liste todos os ingredientes de uma vez — cada um é revelado só no
+momento em que entra em cena.]
 
-[25-50s - Explicação do Problema]
-[Continuação, 2 a 4 frases completas.]
+[25s-1min - Execução Intercalada (parte 1)]
+[Para CADA ingrediente revelado, 4 frases: mostra o ingrediente + ação visual
+(cortar/amassar/misturar) + micro-benefício popular (1 frase folk, nunca
+clínica) + costura emocional/narrativa (1 frase de dor, autoridade folk ou
+história pessoal — 1 pedaço por ingrediente, NUNCA tudo junto).]
 
-[50s-2min - Passo a Passo Completo, com detalhe de cada ingrediente]
-[Continuação, 2 a 4 frases completas — normalmente precisa de 2 a 3 blocos
-de tempo/etapa pra caber o passo a passo inteiro com detalhe, não só 1.]
+[1min-1min50 - Execução Intercalada (parte 2)]
+[Continuação da execução, mesma fórmula de 4 frases por ingrediente, até
+fechar TODOS os ingredientes da receita.]
 
-[2min-2min30 - Por que Funciona]
-[Continuação, 2 a 4 frases completas.]
+[1min50-2min20 - Camada Bônus]
+[2 a 4 frases: uma dica extra ENTREGUE na hora (variação de uso,
+armazenamento, resultado adicional) — nunca anunciada sem entregar.]
 
-[Tempo final - Chamada para Ação]
-[Texto de fechamento, 2 a 3 frases completas.]
-Meta de caracteres desta versão: entre 3.600 e 3.700 caracteres de texto
-falado (não conte os marcadores de tempo/etapa entre colchetes) — isso
-equivale a aproximadamente 650-700 palavras, ou uns 7-9 blocos de
-[Tempo - Etapa] como os do exemplo acima, cada um com 2 a 4 frases completas
-(nunca frases soltas de uma linha só). ATENÇÃO: o erro mais comum é entregar
-essa versão curta demais (na prática, a IA costuma parar por volta de
-2.200-2.500 caracteres, bem abaixo da meta) — se ao planejar a resposta você
-perceber que vai fechar abaixo de 3.500 caracteres, ANTES de finalizar volte
-e desenvolva mais cada bloco (mais detalhe de aplicação, mais explicação do
-porquê funciona, mais contexto/história), em vez de simplesmente encerrar
-cedo. É uma versão longa de propósito — trate os placeholders do exemplo como
-o mínimo de blocos, não o máximo. ATENÇÃO: essa meta de caracteres NUNCA deve
-ser buscada alongando o gancho/primeira frase — se precisar de mais volume
-pra bater a meta, desenvolva os blocos de contexto/explicação do porquê
-funciona/passo a passo com mais detalhe, nunca a frase de abertura (que
-precisa continuar curta e de impacto, ver "Regras adicionais" abaixo).
+[2min20-2min50 - Modo de Uso + Reforço da Promessa]
+[3 a 5 frases: frequência, duração, quando usar, validade. Fecha repetindo a
+promessa absoluta do gancho como confirmação.]
+
+[2min50-3min10 - Fechamento (salvar/compartilhar, SEM comentário)]
+[2 a 3 frases com gatilho de salvamento ou compartilhamento ("Salva esse
+vídeo antes de esquecer." / "Manda pra alguém que precisa disso agora.").
+PROIBIDO pedir comentário nesta versão.]
+ESTRUTURA OBRIGATÓRIA desta versão: PROIBIDO criar um bloco separado de
+"explicação do problema" ou "por que funciona" antes ou depois do passo a
+passo — a explicação vive DENTRO da execução intercalada, 1 frase por
+ingrediente (o micro-benefício + a costura). Dor/contexto em bloco isolado
+nos primeiros 20s é o erro que mais derruba retenção.
+Meta de caracteres desta versão: MÍNIMO INEGOCIÁVEL de 3.600 caracteres de
+texto falado (não conte os marcadores de tempo/etapa entre colchetes); MIRE
+em 3.800-4.000 caracteres (700-750 palavras) — a margem acima do mínimo é
+deliberada, porque o erro sistemático é entregar curto demais. O volume vem
+da ESTRUTURA: com 5-7 ingredientes × 4 frases cada na execução intercalada,
+mais os blocos fixos (gancho, início da receita, bônus, modo de uso,
+fechamento), as 700+ palavras saem naturalmente — se a receita tiver poucos
+ingredientes, desenvolva mais a costura narrativa, a camada bônus e o modo
+de uso, nunca encerre cedo. Essa meta NUNCA deve ser buscada alongando o
+gancho/primeira frase — volume extra vai na execução e nos blocos finais.
 
 ROTEIRO VERSAO-RAPIDA
 [0-3s - Gancho]
-[Texto da versão de 1 minuto, ritmo acelerado, 2 a 3 frases completas.]
+[1 a 2 frases, mesma família do gancho da mãe, comprimido e direto.]
 
-[3-15s - Contexto/Problema]
-[Continuação, 2 a 3 frases completas.]
+[3-45s - Preparo Passo a Passo (ingredientes um a um)]
+[Ingredientes revelados um a um no momento de uso — SEM listar todos no
+início. 1 micro-benefício popular por ingrediente (1 frase só). Quantidades
+podem ser mencionadas normalmente. Use 2 blocos de tempo se precisar.]
 
-[15-45s - Passo a Passo Resumido]
-[Continuação, 2 a 3 frases completas.]
+[45-55s - Modo de Uso]
+[1 a 3 frases.]
 
-[45s-1min - Chamada para Ação]
-[Continuação, 1 a 2 frases completas.]
-Meta de caracteres desta versão: entre 1.200 e 1.300 caracteres de texto
-falado (não conte os marcadores de tempo/etapa entre colchetes) — uns
-200-250 palavras. Mesmo aviso da versão-mãe: não encerre cedo demais, prefira
-desenvolver mais cada bloco a ficar abaixo da meta.
+[55s-1min - Fechamento (salvar, SEM comentário)]
+["Salva esse vídeo antes de esquecer." ou equivalente. PROIBIDO pedir
+comentário nesta versão.]
+Meta de caracteres desta versão: MÍNIMO de 1.200 caracteres de texto falado
+(não conte os marcadores); MIRE em 1.300-1.400 (230-260 palavras). Não
+encerre cedo: desenvolva o passo a passo, nunca o gancho.
 
 ROTEIRO VERSAO-SHORTS
-- 0-3s: "[Frase de impacto inicial]"
-- 3-18s: "[Lista de benefícios em ritmo curto, sem quantidades exatas, 3 a 5 benefícios]"
-- 18-30s: "[Chamada de ação direta]"
-Meta de caracteres desta versão: entre 500 e 600 caracteres de texto falado
-(não conte os marcadores de tempo entre colchetes) — uns 85-100 palavras.
-Mesmo aviso das versões anteriores: essa é a que mais costuma sair curta
-demais na prática — use os 5 benefícios (não 3) na linha do meio, com frases
-completas em vez de fragmentos telegráficos, pra bater a meta em vez de
-ficar abaixo dela.
+- 0-3s: "[Gancho ultra-enxuto, mesma família da mãe, 6-8 palavras]"
+- 3-22s: "[3 a 5 benefícios em ritmo de lista, linguagem popular, SEM NENHUMA quantidade/medida/proporção — as quantidades omitidas são o gatilho do CTA]"
+- 22-30s: "[CTA OBRIGATÓRIA fechando o roteiro, com a palavra RECEITA em caixa alta: 'Comenta RECEITA aqui pra receber a receita com as quantidades exatas e entrar no nosso grupo VIP — receita nova todo dia e sorteios só pra quem é do grupo.' ou variação equivalente]"
+Meta de caracteres desta versão: MÍNIMO de 500 caracteres de texto falado
+(não conte os marcadores); MIRE em 550-650 (95-110 palavras). Use os 5
+benefícios (não 3) na linha do meio, com frases completas em vez de
+fragmentos telegráficos. A linha final de CTA com RECEITA é obrigatória —
+um shorts sem ela não capta lead e é considerado errado.
 
 Regras adicionais:
 - TITULO_CURTO deve ser um mini-título autoexplicativo seguido da categoria
@@ -168,11 +192,20 @@ Regras adicionais:
   passo curto e imperativo — não escreva parágrafo corrido.
 - Não numere nada além do [Número] no título. Não use emoji em cabeçalho,
   tag ou em nenhuma parte da resposta.
-- IMPORTANTE sobre tamanho: as metas de caracteres de cada versão (acima) são
-  regra obrigatória, não sugestão. O padrão de erro mais comum é entregar
-  texto curto demais, principalmente na VERSAO-MAE. Antes de finalizar cada
-  versão, conte mentalmente se já bateu a meta mínima — se não bateu,
-  desenvolva mais em vez de encerrar.
+- IMPORTANTE sobre tamanho: os MÍNIMOS de caracteres de cada versão (acima)
+  são regra obrigatória, não sugestão — e o alvo é sempre a faixa "MIRE em",
+  acima do mínimo. O padrão de erro mais comum é entregar texto curto demais,
+  principalmente na VERSAO-MAE. Siga o contrato estrutural (4 frases por
+  ingrediente na execução intercalada, todos os blocos presentes) e o volume
+  sai naturalmente — se um bloco ficou com 1-2 frases, desenvolva antes de
+  finalizar.
+- CTA por formato (hierarquia fixa, nunca trocar): a VERSAO-SHORTS SEMPRE
+  fecha com o CTA de comentário RECEITA (palavra em caixa alta, só nessa
+  versão) — sem ele o vídeo não capta lead. VERSAO-MAE e VERSAO-RAPIDA NUNCA
+  pedem comentário (nem usam RECEITA em caixa alta) — fecham com gatilho de
+  salvar/compartilhar. PROIBIDO em qualquer CTA: "link na bio", "direct",
+  "DM", "inbox", "te mando", "te chamo", "te envio" — o verbo é sempre
+  comentar/escrever/deixar + receber/entrar/fazer parte.
 - PRESERVAÇÃO DO GANCHO (a regra mais importante sobre o gancho): não troque
   a estrutura/intensidade do gancho do vídeo de referência (ver abertura
   literal fornecida na mensagem do usuário) por algo genérico. Se o gancho
@@ -195,10 +228,10 @@ Regras adicionais:
 - Orçamento de palavras do gancho: a primeira frase falada de cada versão
   deve ser curta e de altíssimo impacto — até ~10 palavras na mãe, ~10-12 na
   rápida, ~6-8 no shorts. Nunca mais longo que isso.
-- Ponte gancho → contexto: logo após o gancho curto, o bloco de
-  Contexto/História deve conectar com autoridade/origem (quem ensinou, há
-  quanto tempo, uma pequena história pessoal) antes de entrar na explicação
-  técnica ou no passo a passo — não pule do gancho direto pra explicação.
+- Ponte gancho → ação: logo após o gancho curto, a AÇÃO começa (primeiro
+  ingrediente na mão) — a autoridade/origem (quem ensinou, há quanto tempo)
+  entra em UMA frase curta na transição ou diluída na costura do primeiro
+  ingrediente, nunca como bloco de história antes da receita começar.
 - Erro comum a evitar (proibido): NUNCA abra com uma cena/anedota longa
   contando como você "descobriu" o truque (ex: "Descobri isso por acaso,
   quando fui trocar o lençol num domingo de manhã e vi que o colchão tinha
@@ -209,13 +242,17 @@ Regras adicionais:
   branquinho e perfumado", a abertura adaptada continua sendo resultado
   direto ("Meu colchão fica branquinho e perfumado com um truque só"), nunca
   uma cena de descoberta contada em detalhe. A cena/anedota, se fizer
-  sentido, entra no bloco de Contexto/História (depois do gancho), nunca
-  antes ou misturada nele.
+  sentido, entra diluída na costura da execução intercalada (1 frase por
+  ingrediente), nunca antes do gancho nem como bloco isolado.
 """.strip()
 
-LIMITE_MAE = (3600, 3700)
-LIMITE_RAPIDA = (1200, 1300)
-LIMITE_SHORTS = (500, 600)
+# Mínimo inegociável e teto brando de texto falado por versão. Abaixo do
+# mínimo o vídeo não atinge a duração-alvo; acima do teto o ritmo cai. Não há
+# mais retry — qualquer violação vira AVISO visível (log, callout de QA no
+# Notion e mensagem no Telegram), nunca uma segunda chamada de API.
+LIMITE_MAE = (3600, 4300)
+LIMITE_RAPIDA = (1200, 1600)
+LIMITE_SHORTS = (500, 800)
 
 # Tetos soltos (só teto, nunca piso) pra quantas palavras a primeira frase
 # falada de cada versão pode ter - contar palavra em português tem margem de
@@ -262,32 +299,48 @@ def _extrair_abertura_referencia(transcript: str, max_palavras: int = 40) -> str
     return abertura
 
 
-def _fora_da_meta(parsed: dict) -> list[str]:
-    problemas = []
-    tam_mae = _tamanho_falado(parsed["versao_mae"])
-    if not (LIMITE_MAE[0] <= tam_mae <= LIMITE_MAE[1]):
-        problemas.append(f"VERSAO-MAE tem {tam_mae} caracteres (meta: {LIMITE_MAE[0]}-{LIMITE_MAE[1]}).")
-    tam_rapida = _tamanho_falado(parsed["versao_rapida"])
-    if not (LIMITE_RAPIDA[0] <= tam_rapida <= LIMITE_RAPIDA[1]):
-        problemas.append(f"VERSAO-RAPIDA tem {tam_rapida} caracteres (meta: {LIMITE_RAPIDA[0]}-{LIMITE_RAPIDA[1]}).")
-    tam_shorts = _tamanho_falado(parsed["versao_shorts"])
-    if not (LIMITE_SHORTS[0] <= tam_shorts <= LIMITE_SHORTS[1]):
-        problemas.append(f"VERSAO-SHORTS tem {tam_shorts} caracteres (meta: {LIMITE_SHORTS[0]}-{LIMITE_SHORTS[1]}).")
+# CTA de comentário: obrigatória (com RECEITA em caixa alta) só na shorts;
+# proibida na mãe e na rápida. As regexes são deliberadamente simples — o
+# objetivo é pegar o caso comum, não cobrir toda variação de frase.
+CTA_COMENTARIO_RE = re.compile(r"coment\w*[^.!?\n]{0,40}\breceita\b", re.IGNORECASE)
+
+
+def _avisos_qa(parsed: dict) -> list[str]:
+    """Checagens programáticas de qualidade (tamanho, gancho, CTA). Sem retry:
+    o resultado vira aviso visível (log + Notion + Telegram), nunca segunda
+    chamada de API."""
+    avisos = []
+    for nome, texto, (minimo, teto) in (
+        ("VERSAO-MAE", parsed["versao_mae"], LIMITE_MAE),
+        ("VERSAO-RAPIDA", parsed["versao_rapida"], LIMITE_RAPIDA),
+        ("VERSAO-SHORTS", parsed["versao_shorts"], LIMITE_SHORTS),
+    ):
+        tam = _tamanho_falado(texto)
+        if tam < minimo:
+            avisos.append(f"{nome} tem {tam} caracteres falados (mínimo: {minimo}) - saiu curta, vídeo pode não atingir a duração-alvo.")
+        elif tam > teto:
+            avisos.append(f"{nome} tem {tam} caracteres falados (teto: ~{teto}) - saiu longa, ritmo pode cair.")
 
     if parsed["versao_mae"]:
         n = len(roteiro_parser.primeira_frase_falada(parsed["versao_mae"]).split())
         if n > HOOK_LIMITE_MAE_PALAVRAS:
-            problemas.append(f"Gancho da VERSAO-MAE tem {n} palavras (meta: até {HOOK_LIMITE_MAE_PALAVRAS}) - primeira frase muito longa/genérica, encurte.")
+            avisos.append(f"Gancho da VERSAO-MAE tem {n} palavras (meta: até {HOOK_LIMITE_MAE_PALAVRAS}) - primeira frase longa/genérica.")
     if parsed["versao_rapida"]:
         n = len(roteiro_parser.primeira_frase_falada(parsed["versao_rapida"]).split())
         if n > HOOK_LIMITE_RAPIDA_PALAVRAS:
-            problemas.append(f"Gancho da VERSAO-RAPIDA tem {n} palavras (meta: até {HOOK_LIMITE_RAPIDA_PALAVRAS}) - primeira frase muito longa/genérica, encurte.")
+            avisos.append(f"Gancho da VERSAO-RAPIDA tem {n} palavras (meta: até {HOOK_LIMITE_RAPIDA_PALAVRAS}) - primeira frase longa/genérica.")
     if parsed["versao_shorts"]:
         n = len(roteiro_parser.primeira_linha_shorts(parsed["versao_shorts"]).split())
         if n > HOOK_LIMITE_SHORTS_PALAVRAS:
-            problemas.append(f"Gancho da VERSAO-SHORTS tem {n} palavras (meta: até {HOOK_LIMITE_SHORTS_PALAVRAS}) - frase de impacto muito longa, encurte.")
+            avisos.append(f"Gancho da VERSAO-SHORTS tem {n} palavras (meta: até {HOOK_LIMITE_SHORTS_PALAVRAS}) - frase de impacto longa.")
 
-    return problemas
+    if parsed["versao_shorts"] and not re.search(r"\bRECEITA\b", parsed["versao_shorts"]):
+        avisos.append("VERSAO-SHORTS sem o CTA de comentário RECEITA (obrigatório nesse formato - sem ele o vídeo não capta lead).")
+    for nome, texto in (("VERSAO-MAE", parsed["versao_mae"]), ("VERSAO-RAPIDA", parsed["versao_rapida"])):
+        if texto and CTA_COMENTARIO_RE.search(texto):
+            avisos.append(f"{nome} contém CTA de comentário (proibido nesse formato - deve fechar só com salvar/compartilhar).")
+
+    return avisos
 
 
 def fetch_kb() -> str:
@@ -298,12 +351,15 @@ def fetch_kb() -> str:
     )
     resp.raise_for_status()
     files = resp.json()["files"]
-    sistema = files[SISTEMA_FILENAME]["content"]
-    banco = files[BANCO_FILENAME]["content"]
-    return (
-        f"# SISTEMA_VIRAL_RECEITARIA.md\n\n{sistema}\n\n"
-        f"# BANCO_VIRAIS_RECEITARIA.md\n\n{banco}"
-    )
+    pipeline = files.get(PIPELINE_FILENAME, {}).get("content")
+    if not pipeline:
+        # Sem fallback pra KB completa de propósito: cair silenciosamente pra
+        # SISTEMA+BANCO inteiros voltaria ao custo antigo (~5x) sem ninguém ver.
+        raise RuntimeError(
+            f"{PIPELINE_FILENAME} não encontrado (ou vazio) no Gist da KB ({KB_GIST_ID}). "
+            "Suba a versão condensada do pipeline pro Gist antes de gerar roteiro."
+        )
+    return f"# SISTEMA_VIRAL_PIPELINE.md\n\n{pipeline}"
 
 
 def find_vencedor_match(source_url: str):
@@ -352,28 +408,19 @@ def build_system_prompt(kb: str, vencedor_nome: str | None, use_cache: bool):
     )
     stable_prompt = (
         "Você é o redator viral da Receitaria Curiosa. Use a base de conhecimento abaixo "
-        "(regras de linguagem, frameworks de gancho, banco de roteiros testados) para "
-        "escrever um roteiro novo de vídeo curto, no mesmo estilo e estrutura dos roteiros "
-        "vencedores, a partir da transcrição de um vídeo de referência que o usuário vai "
-        "fornecer. Não copie a transcrição literalmente — adapte pro formato e gancho de "
-        "vídeo curto, respeitando as regras de linguagem/compliance do documento (evitar "
-        "termos clínicos e frases de watchbait)."
+        "(regras de estrutura intercalada, famílias de gancho, léxico viral, CTA por "
+        "formato e exemplos padrão-ouro) para escrever um roteiro novo a partir da "
+        "transcrição de um vídeo de referência que o usuário vai fornecer. Não copie a "
+        "transcrição literalmente — adapte pro estilo Receitaria, respeitando as regras de "
+        "linguagem/compliance (nada de termos clínicos nem watchbait). Sua resposta será "
+        "parseada automaticamente por um script: use EXCLUSIVAMENTE o formato de tags de "
+        "texto puro definido a seguir, sem markdown, sem emoji, sem texto antes ou depois."
         + "\n\n" + FORMATO_SAIDA.format(
             categorias=", ".join(CATEGORIAS),
             pilares=", ".join(PILARES),
             familias_gancho=", ".join(FAMILIAS_GANCHO),
         )
         + "\n\n" + kb
-        + "\n\n⚠️ ATENÇÃO — CONFLITO DE FORMATO: a base de conhecimento acima tem uma seção "
-        "'FORMATO DE ENTREGA OBRIGATÓRIO' (com blocos 📊 ANÁLISE, 🔴🟠🟡 ROTEIRO) pensada pra "
-        "colar manualmente no agente Cowork — NÃO é o formato que você deve usar aqui. Aqui, "
-        "IGNORE COMPLETAMENTE aquela seção e use EXCLUSIVAMENTE o formato de tags de texto puro "
-        "definido acima (CATEGORIA:, PILAR:, TITULO_CURTO:, TITULOS A/B, HASHTAGS, INGREDIENTES, "
-        "MODO DE PREPARO, ROTEIRO VERSAO-MAE, ROTEIRO VERSAO-RAPIDA, ROTEIRO VERSAO-SHORTS) — um "
-        "script vai fazer parsing automático da sua resposta procurando exatamente essas tags, sem "
-        "markdown, sem emoji nos cabeçalhos, sem texto antes ou depois. As metas de caracteres "
-        "informadas em cada versão do roteiro acima têm PRIORIDADE sobre qualquer meta de caracteres "
-        "mencionada na base de conhecimento — siga sempre as metas definidas aqui."
     )
 
     if not use_cache:
@@ -429,36 +476,21 @@ def main() -> None:
     message = client.messages.create(messages=messages, **kwargs)
     roteiro_text = "".join(block.text for block in message.content if block.type == "text")
     parsed = roteiro_parser.parse(roteiro_text)
-    problemas = _fora_da_meta(parsed)
 
-    if problemas:
-        print(f"--- Fora da meta (tamanho e/ou gancho), tentando 1x corrigir: {problemas} ---")
-        messages.append({"role": "assistant", "content": roteiro_text})
-        messages.append({"role": "user", "content": (
-            "Sua resposta anterior ficou fora da meta exigida:\n"
-            + "\n".join(f"- {p}" for p in problemas)
-            + "\n\nReescreva a resposta INTEIRA (mesmo formato de tags, do zero, "
-            "incluindo CATEGORIA/PILAR/TITULO_CURTO e ANALISE_GANCHO), ajustando "
-            "o que estiver fora da meta. Se a versão ficou curta, o déficit de "
-            "caracteres acima é literal — não é 'quase lá', desenvolva de verdade "
-            "mais frases nos blocos de contexto/explicação do porquê funciona/"
-            "passo a passo (mais detalhe de aplicação, mais exemplos, mais "
-            "explicação), NUNCA encurtando ainda mais o gancho pra compensar. Se o "
-            "problema for de gancho longo demais, encurte só a primeira frase "
-            "mantendo a mesma ideia/estrutura do gancho original — não vire "
-            "telegráfico nem troque por algo genérico. Não adicione comentário "
-            "fora do formato."
-        )})
-        retry_msg = client.messages.create(messages=messages, **kwargs)
-        roteiro_retry = "".join(b.text for b in retry_msg.content if b.type == "text")
-        parsed_retry = roteiro_parser.parse(roteiro_retry)
-        # só troca se a segunda tentativa realmente melhorou o parsing/tamanho;
-        # senão fica com a primeira resposta (parseável) - ter algo é melhor que
-        # arriscar um retry pior.
-        if parsed_retry["versao_mae"] or parsed_retry["versao_rapida"]:
-            roteiro_text = roteiro_retry
-            message = retry_msg
-        print(f"--- Após retry: {_fora_da_meta(parsed_retry) or 'dentro da meta'} ---")
+    # Sem retry (decisão deliberada de custo): o prompt foi desenhado pra
+    # acertar de primeira (contrato estrutural + overshoot de tamanho). Se algo
+    # sair fora, vira aviso visível — nunca uma segunda chamada de API.
+    avisos = _avisos_qa(parsed)
+    if avisos:
+        print(f"--- Avisos de QA (sem retry, roteiro segue mesmo assim): {avisos} ---")
+        notifier.success("⚠️ Roteiro gerado com avisos de QA:\n- " + "\n- ".join(avisos))
+    else:
+        print("--- QA ok: tamanhos, ganchos e CTAs dentro do esperado ---")
+
+    print(
+        f"--- Uso de tokens: entrada={message.usage.input_tokens}, "
+        f"saída={message.usage.output_tokens} ---"
+    )
 
     if use_cache:
         print(
@@ -479,6 +511,7 @@ def main() -> None:
     update_kwargs = dict(
         roteiro=roteiro_text,
         vencedor_relacionado_id=vencedor[0] if vencedor else None,
+        qa_avisos=avisos,
     )
     if titulo_final:
         update_kwargs["rotulo"] = titulo_final

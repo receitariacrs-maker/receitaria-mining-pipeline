@@ -149,11 +149,19 @@ def build_callout(icon: dict, color: str, title: str, children: list) -> dict:
     }
 
 
-def build_children_blocks(parsed: dict, source_url: str | None) -> list:
+def build_children_blocks(parsed: dict, source_url: str | None, qa_avisos: list | None = None) -> list:
     blocks = []
 
     if source_url:
         blocks.append(paragraph_block("Vídeo de referência", link=source_url, color="gray"))
+
+    # Avisos das checagens programáticas de QA (tamanho/gancho/CTA) - desde a
+    # remoção do retry, este callout é o lugar onde qualquer desvio fica
+    # visível. Vem antes de tudo de propósito: se existir, é a primeira coisa
+    # que o Luiz precisa ver no card.
+    if qa_avisos:
+        blocks.append(build_callout(ICON_EDIT, "red_background", "⚠️ Avisos de QA",
+                                    [paragraph_block(aviso) for aviso in qa_avisos]))
 
     titulos = parsed["titulos_ab"]
     blocks.append(build_callout(ICON_EDIT, "yellow_background", "Títulos A/B", [
@@ -231,7 +239,7 @@ def create_page(ctx: dict) -> str:
             "parent": {"database_id": DATABASE_ID},
             "icon": icone_para_categoria(parsed.get("categoria")),
             "properties": build_properties(parsed, ctx),
-            "children": build_children_blocks(parsed, ctx.get("source_url")),
+            "children": build_children_blocks(parsed, ctx.get("source_url"), ctx.get("qa_avisos")),
         },
         timeout=30,
     )
