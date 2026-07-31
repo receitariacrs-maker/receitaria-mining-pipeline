@@ -7,11 +7,35 @@ no "Banco de Roteiros" do Notion. **Facebook não aceita link** (testado e
 confirmado — ver seção do Apify abaixo) — pra Facebook, manda o áudio/vídeo
 direto no chat, sem link.
 
+## Como as peças se encaixam
+
+1. **Cloudflare Worker** (`cloudflare-worker/`) recebe a mensagem do Telegram por
+   **webhook** (instantâneo) e a coloca numa fila guardada no Gist de estado.
+2. A fila é disparada quando junta **7 vídeos** ou passam **15 minutos** — o Worker
+   então chama o `process-video.yml` no GitHub Actions.
+3. O workflow baixa → transcreve → escreve o roteiro → cria o card no Notion.
+4. `queue-flush.yml` (cron de 30 min) é só **rede de segurança**, para o caso raro de
+   algo ficar preso na fila. O cron do GitHub Actions **não** é o caminho principal:
+   ele já teve gaps reais de 3h+ e por isso a detecção migrou para o Worker.
+   Se algo "não disparar", **olhar os logs do Worker primeiro**.
+
+> Histórico: até 2026-07-18 a detecção era um `telegram-poll.yml` fazendo polling.
+> Esse workflow não existe mais.
+
+## Comandos no chat do bot
+
+- **"forçar" / "fazer agora" / `/forcar`** — dispara a fila inteira na hora, sem
+  esperar os 7 vídeos ou os 15 minutos.
+- **"limpar" / `/clear`** — apaga as mensagens que o bot mandou (rastreadas no Gist
+  de estado). Um Cron Trigger do Worker faz a mesma limpeza às 03:00 BRT todo dia —
+  o `deleteMessage` do Telegram só funciona em mensagens com menos de 48h, por isso
+  a limpeza é diária e não semanal.
+
 ## O que o bot te avisa no Telegram
 
 O bot manda uma mensagem a cada etapa, não só no início e no fim:
 
-1. 📥 Recebi! Vou processar...
+1. 📥 Recebi! Na fila (n/7)...
 2. ⬇️ Baixando o vídeo/áudio... → ✅ Download concluído
 3. 🎧 Transcrevendo o áudio... → ✅ Transcrição pronta
 4. ✍️ Escrevendo o roteiro... → ✅ Roteiro pronto
@@ -19,6 +43,21 @@ O bot manda uma mensagem a cada etapa, não só no início e no fim:
 
 Se alguma etapa falhar, o bot avisa **na hora**, dizendo qual etapa foi e o motivo
 em palavras simples (não só "deu erro") — junto com uma dica do que fazer.
+
+## Qualidade do roteiro: avisos de QA, sem retry
+
+O `generate_script.py` faz **uma única chamada** à API — não existe retry de tamanho
+(foi removido por decisão explícita: dobrava o custo e disparava quase sempre).
+O tamanho é garantido por contrato estrutural + overshoot no prompt (mirar
+3.800-4.000 caracteres na versão-mãe, mínimo 3.600). Desvios viram **avisos de QA**:
+log do Actions + callout vermelho no topo do card do Notion + mensagem no Telegram.
+Se a mãe sair curta demais de forma recorrente, ajustar o número do overshoot no
+prompt — nunca reintroduzir retry.
+
+As checagens de `_avisos_qa()` (tamanhos mínimos, gancho, CTA por formato) espelham
+o `SISTEMA_VIRAL_PIPELINE.md`. Ao mexer no `FORMATO_SAIDA`, validar contra ele antes:
+nada de bloco isolado de "explicação do problema", e CTA de comentário só na versão
+de 25-30s.
 
 ## Antes de ligar: passo a passo de setup (uma vez só)
 
@@ -30,7 +69,7 @@ em palavras simples (não só "deu erro") — junto com uma dica do que fazer.
    e procure `"id"` dentro de `"from"`. Esse número é o `TELEGRAM_ALLOWED_USER_ID`
    (garante que só você consegue usar o bot).
 
-### 2. Gist privado (guarda o "offset" do Telegram)
+### 2. Gist privado (guarda o estado: fila, offset e ids de mensagem)
 1. Vá em https://gist.github.com → crie um Gist **privado** (secret) com um
    arquivo chamado `mining_pipeline_state.json` e conteúdo `{}`.
 2. Pegue o ID do Gist (fica na URL, depois do seu usuário).
@@ -40,8 +79,14 @@ em palavras simples (não só "deu erro") — junto com uma dica do que fazer.
    e o ID do Gist vira `GIST_ID`.
 
 ### 3. Gist privado da base de conhecimento
-1. Crie **outro** Gist privado com dois arquivos: `SISTEMA_VIRAL_RECEITARIA.md`
-   e `BANCO_VIRAIS_RECEITARIA.md` (cole o conteúdo desses dois documentos).
+1. Crie **outro** Gist privado com o arquivo `SISTEMA_VIRAL_PIPELINE.md` — a versão
+   condensada (~21k chars) que mora em
+   `C:\Kinn Media\01 - Receitaria Curiosa\Conteudo\Roteiros\SISTEMA_VIRAL_PIPELINE.md`.
+   É **só esse** arquivo que o pipeline lê (`fetch_kb()` erra alto se ele faltar).
+   Os mestres `SISTEMA_VIRAL_RECEITARIA.md` e `BANCO_VIRAIS_RECEITARIA.md` podem ficar
+   no mesmo Gist para referência, mas não entram no prompt: mandar os dois inteiros
+   custava ~78k tokens de entrada por vídeo (~$0,31) contra ~11-12k (~$0,04) hoje.
+   Quando a metodologia mudar no mestre, regerar a versão pipeline e reenviar ao Gist.
 2. Pegue o ID → `KB_GIST_ID`. Pode reaproveitar o mesmo token clássico do passo
    2 (mesmo escopo `gist` já serve) — cole o mesmo valor como o secret
    `KB_GIST_TOKEN` (tem que existir esse secret separado, mesmo com valor igual).
@@ -135,6 +180,18 @@ APIFY_ACTOR_INSTAGRAM    (opcional — só se quiser usar um actor diferente do 
 ARCHIVE_STATUS_VALUE     (opcional — nome exato da coluna/status "Postado" no seu Kanban; se não setar, usa "Postado")
 ```
 
+⚠️ Uma variável **criada mas vazia** chega no script como string vazia, não como
+chave ausente — `os.environ.get(k, default)` não cai no default nesse caso. Por isso
+toda env var opcional usa `os.environ.get(k) or default`. Isso já derrubou 100% dos
+links de Instagram por dias, silenciosamente. Manter o padrão em variáveis novas.
+
+### 10. Deploy do Cloudflare Worker
+O Worker é quem recebe as mensagens — sem ele, nada dispara. Passo a passo (criar,
+colar `worker.js`, cadastrar os secrets e registrar o webhook) em
+[`cloudflare-worker/README.md`](cloudflare-worker/README.md).
+**Toda mudança em `worker.js` só vale depois de um novo deploy** (`wrangler deploy`
+ou colar o código no painel) — código commitado no repo não chega em produção sozinho.
+
 ## Arquivamento automático dos cards "Postado"
 
 `archive-posted.yml` roda 1x por dia e arquiva (manda pro lixo do Notion — some
@@ -144,15 +201,25 @@ status no seu Kanban for diferente, ajuste a variável `ARCHIVE_STATUS_VALUE`.
 
 ## Testando antes de ligar de vez
 
-1. Rode `telegram-poll.yml` manualmente (aba Actions → "Run workflow") depois de
-   mandar um link de TikTok pro bot — confirme que dispara o `process-video.yml`.
+1. Mande um link de TikTok pro bot e responda "fazer agora" (ou rode
+   `queue-flush.yml` pela aba Actions com `force = true`) — confirme que dispara o
+   `process-video.yml`.
 2. Rode `process-video.yml` de novo com o mesmo link — confirme que ele detecta
    que já existe (não duplica o card no Notion).
 3. Teste mandando um link de Instagram (deve baixar via Apify sozinho) e depois
    um link de Facebook (deve responder na hora pedindo áudio/vídeo direto, sem
    nem disparar o pipeline pesado) e um áudio direto no chat — confirme os três
    comportamentos.
-4. Só depois disso, deixe o cron do `telegram-poll.yml` rodando sozinho.
+4. Só depois disso, deixe rodar sozinho pelo gatilho normal (7 vídeos ou 15 min).
+
+## Os workflows que existem
+
+| Workflow | Quando roda | Para quê |
+|---|---|---|
+| `process-video.yml` | disparado pelo Worker (ou manualmente) | o pipeline em si: baixa → transcreve → roteiro → Notion |
+| `queue-flush.yml` | cron de 30 min + manual (com `force`) | rede de segurança para fila presa |
+| `archive-posted.yml` | 1x por dia | arquiva no Notion os cards com Status "Postado" |
+| `keepalive.yml` | 1x por mês | commit trivial; o GitHub desativa cron após 60 dias sem commits |
 
 ## Formato do card gerado no Banco de Roteiros
 

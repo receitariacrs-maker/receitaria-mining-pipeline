@@ -3,3 +3,4 @@ __pycache__/
 run_context.json
 downloaded_media*
 audio_extracted.mp3
+cloudflare-worker/.wrangler/
