@@ -102,6 +102,13 @@ GATILHO: [o gatilho psicológico: curiosidade, urgência, autoridade, prova soci
 AJUSTE_VERACIDADE: [o que precisou ser ajustado, se algo, pra o gancho original ficar verídico - ou "nenhum, gancho original já era verídico"]
 
 ROTEIRO VERSAO-MAE
+Os rótulos entre colchetes são LITERAIS: copie cada um exatamente como está,
+na ordem em que aparecem, sem renomear e sem acrescentar. É PROIBIDO criar
+rótulo próprio — em especial "Contexto", "História", "Contexto/História",
+"Explicação do Problema", "Por que Funciona", "Passo a Passo Completo",
+"Introdução" e "Benefícios". Esses nomes descrevem uma estrutura linear que
+este roteiro não usa: a explicação vive DENTRO da execução, uma frase por
+ingrediente.
 [0-10s - Gancho + Micro-promessa]
 [Texto falado, 2 a 4 frases completas — não uma linha solta. Família do
 gancho de referência + combinação inusitada + número específico + promessa.]
@@ -140,9 +147,10 @@ ingrediente (o micro-benefício + a costura). Dor/contexto em bloco isolado
 nos primeiros 20s é o erro que mais derruba retenção.
 Meta de caracteres desta versão: MÍNIMO INEGOCIÁVEL de 3.600 caracteres de
 texto falado (não conte os marcadores de tempo/etapa entre colchetes); MIRE
-em 3.800-4.000 caracteres (700-750 palavras) — a margem acima do mínimo é
-deliberada, porque o erro sistemático é entregar curto demais. O volume vem
-da ESTRUTURA: com 5-7 ingredientes × 4 frases cada na execução intercalada,
+em 3.600-3.700 caracteres (660-690 palavras) — essa é a faixa validada: o
+roteiro de maior performance do histórico tem 3.603 caracteres. Não estique
+o texto para passar disso. O volume vem da ESTRUTURA: com 5-7 ingredientes
+× 4 frases cada na execução intercalada,
 mais os blocos fixos (gancho, início da receita, bônus, modo de uso,
 fechamento), as 700+ palavras saem naturalmente — se a receita tiver poucos
 ingredientes, desenvolva mais a costura narrativa, a camada bônus e o modo
@@ -165,18 +173,22 @@ podem ser mencionadas normalmente. Use 2 blocos de tempo se precisar.]
 ["Salva esse vídeo antes de esquecer." ou equivalente. PROIBIDO pedir
 comentário nesta versão.]
 Meta de caracteres desta versão: MÍNIMO de 1.200 caracteres de texto falado
-(não conte os marcadores); MIRE em 1.300-1.400 (230-260 palavras). Não
+(não conte os marcadores); MIRE em 1.200-1.300 (220-240 palavras). Não
 encerre cedo: desenvolva o passo a passo, nunca o gancho.
 
 ROTEIRO VERSAO-SHORTS
 - 0-3s: "[Gancho ultra-enxuto, mesma família da mãe, 6-8 palavras]"
-- 3-22s: "[3 a 5 benefícios em ritmo de lista, linguagem popular, SEM NENHUMA quantidade/medida/proporção — as quantidades omitidas são o gatilho do CTA]"
+- 3-22s: "[PREPARO PASSO A PASSO COMPLETO, do início ao modo de uso, SEM NENHUMA quantidade/medida/proporção. Cada ingrediente aparece pelo nome no momento em que entra, na mesma ordem da versão-mãe, com a ação física visível e no máximo uma oração curta de micro-benefício popular. Termina no modo de uso (como aplicar, com que frequência) e fecha com o resultado em 1ª pessoa.]"
 - 22-30s: "[CTA OBRIGATÓRIA fechando o roteiro, com a palavra RECEITA em caixa alta: 'Comenta RECEITA aqui pra receber a receita com as quantidades exatas e entrar no nosso grupo VIP — receita nova todo dia e sorteios só pra quem é do grupo.' ou variação equivalente]"
-Meta de caracteres desta versão: MÍNIMO de 500 caracteres de texto falado
-(não conte os marcadores); MIRE em 550-650 (95-110 palavras). Use os 5
-benefícios (não 3) na linha do meio, com frases completas em vez de
-fragmentos telegráficos. A linha final de CTA com RECEITA é obrigatória —
-um shorts sem ela não capta lead e é considerado errado.
+Meta de caracteres desta versão: MÍNIMO de 550 caracteres de texto falado
+(não conte os marcadores); MIRE em 600-700 (110-130 palavras).
+REGRA CENTRAL desta versão: o espectador precisa sair sabendo exatamente O QUE
+fazer e em que ordem, e NÃO saber QUANTO de cada coisa. Escreva "o vinagre",
+"o bicarbonato", "a água" — NUNCA "duas colheres de vinagre", "300 ml de água".
+A quantidade omitida é o único gatilho do CTA. É PROIBIDO transformar esta
+versão em lista de benefícios empilhados sem preparo (era o modelo antigo e foi
+substituído) — se não houver sequência de preparo, a versão está errada. A
+linha final de CTA com RECEITA é obrigatória: um shorts sem ela não capta lead.
 
 Regras adicionais:
 - TITULO_CURTO deve ser um mini-título autoexplicativo seguido da categoria
@@ -250,9 +262,19 @@ Regras adicionais:
 # mínimo o vídeo não atinge a duração-alvo; acima do teto o ritmo cai. Não há
 # mais retry — qualquer violação vira AVISO visível (log, callout de QA no
 # Notion e mensagem no Telegram), nunca uma segunda chamada de API.
-LIMITE_MAE = (3600, 4300)
-LIMITE_RAPIDA = (1200, 1600)
-LIMITE_SHORTS = (500, 800)
+LIMITE_MAE = (3600, 3900)
+LIMITE_RAPIDA = (1200, 1450)
+LIMITE_SHORTS = (550, 800)
+
+# Medidas não podem aparecer na shorts: a quantidade omitida é o único gatilho
+# do CTA de comentário. Pega o caso comum (unidade explícita ou numeral colado
+# num item), não toda variação possível.
+QUANTIDADE_SHORTS_RE = re.compile(
+    r"\b(?:\d+\s*(?:ml|mililitros?|l|litros?|g|gramas?|kg)"
+    r"|(?:uma?|dois|duas|tr[êe]s|quatro|cinco|meia|meio|\d+)\s+"
+    r"(?:colher(?:es)?|x[íi]cara?s?|copos?|pitadas?|punhados?|dentes?|fatias?|gotas?))\b",
+    re.IGNORECASE,
+)
 
 # Tetos soltos (só teto, nunca piso) pra quantas palavras a primeira frase
 # falada de cada versão pode ter - contar palavra em português tem margem de
@@ -336,6 +358,14 @@ def _avisos_qa(parsed: dict) -> list[str]:
 
     if parsed["versao_shorts"] and not re.search(r"\bRECEITA\b", parsed["versao_shorts"]):
         avisos.append("VERSAO-SHORTS sem o CTA de comentário RECEITA (obrigatório nesse formato - sem ele o vídeo não capta lead).")
+
+    if parsed["versao_shorts"]:
+        medidas = QUANTIDADE_SHORTS_RE.findall(parsed["versao_shorts"])
+        if medidas:
+            avisos.append(
+                f"VERSAO-SHORTS menciona quantidade ({', '.join(sorted(set(medidas))[:5])}) - "
+                "proibido nesse formato: a medida omitida é o gatilho do CTA de comentário."
+            )
     for nome, texto in (("VERSAO-MAE", parsed["versao_mae"]), ("VERSAO-RAPIDA", parsed["versao_rapida"])):
         if texto and CTA_COMENTARIO_RE.search(texto):
             avisos.append(f"{nome} contém CTA de comentário (proibido nesse formato - deve fechar só com salvar/compartilhar).")
