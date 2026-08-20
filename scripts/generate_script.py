@@ -504,7 +504,11 @@ def _gerar_via_cli(system_prompt, user_content: str) -> str | None:
             capture_output=True,
             text=True,
             encoding="utf-8",
-            timeout=180,
+            # 180s não bastava pro prompt completo (KB inteira + transcrição,
+            # ~17k tokens de entrada): a CLI tem overhead de inicialização que
+            # a chamada direta de API não tem, e estava sempre estourando o
+            # timeout e caindo pra API. 400s dá margem real pra ela terminar.
+            timeout=400,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
         print(f"--- CLI falhou ao executar ({exc}), caindo para API ---")
