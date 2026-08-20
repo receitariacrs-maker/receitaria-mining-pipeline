@@ -16,8 +16,11 @@ Antes de gerar, confere se o link de origem já é um vencedor conhecido (base
 "Banco de Vencedores Próprios") — se for, o roteiro é forçosamente um caso de
 "Reciclagem" (remake de algo que já provou funcionar), não uma decisão da IA.
 """
+import json
 import os
 import re
+import shutil
+import subprocess
 import time
 
 import anthropic
@@ -466,6 +469,73 @@ def build_system_prompt(kb: str, vencedor_nome: str | None, use_cache: bool):
     return system
 
 
+# Não existe forma de checar o % de uso do plano de assinatura antes de
+# chamar (a Anthropic não expõe isso em nenhum endpoint) - o sinal usado pra
+# decidir "cai pra API" é reativo: qualquer erro que a CLI devolva (limite,
+# quota, indisponibilidade) já é motivo suficiente pro fallback de API key.
+def _system_prompt_text(system_prompt) -> str:
+    """`build_system_prompt` devolve string simples ou lista de blocos com
+    `cache_control` (recurso da API, sem equivalente na sessão de CLI) -
+    aqui achata pro texto puro que o `--append-system-prompt` do CLI espera."""
+    if isinstance(system_prompt, str):
+        return system_prompt
+    return "\n\n".join(block["text"] for block in system_prompt)
+
+
+def _gerar_via_cli(system_prompt, user_content: str) -> str | None:
+    """Tenta gerar o roteiro usando o Claude Code CLI (consome o plano de
+    assinatura, não a API por token). Retorna None em qualquer situação que
+    deva cair pro fallback de API - CLI ausente, sem credencial, erro de
+    limite/quota, ou qualquer falha inesperada. Nunca derruba o script: a
+    chamada de API em main() continua sendo a rede de segurança."""
+    if shutil.which("claude") is None:
+        print("--- CLI do Claude não encontrada no PATH, usando API diretamente ---")
+        return None
+
+    try:
+        result = subprocess.run(
+            [
+                "claude", "-p",
+                "--output-format", "json",
+                "--model", MODEL,
+                "--append-system-prompt", _system_prompt_text(system_prompt),
+            ],
+            input=user_content,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=180,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        print(f"--- CLI falhou ao executar ({exc}), caindo para API ---")
+        return None
+
+    if result.returncode != 0:
+        print(f"--- CLI saiu com código {result.returncode}, caindo para API. stderr: {result.stderr[:500]} ---")
+        return None
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        print("--- CLI devolveu saída que não é JSON válido, caindo para API ---")
+        return None
+
+    erro = data.get("error")
+    if erro:
+        tipo = erro.get("type") if isinstance(erro, dict) else None
+        print(f"--- CLI devolveu erro ({tipo or erro}), caindo para API ---")
+        return None
+
+    texto = data.get("result")
+    if not texto:
+        print("--- CLI não devolveu texto em 'result', caindo para API ---")
+        return None
+
+    custo = data.get("total_cost_usd")
+    print(f"--- Roteiro gerado via CLI (plano de assinatura). Custo estimado: {custo} ---")
+    return texto
+
+
 def main() -> None:
     ctx = context.load()
     kb = fetch_kb()
@@ -503,8 +573,14 @@ def main() -> None:
         system=system_prompt,
     )
 
-    message = client.messages.create(messages=messages, **kwargs)
-    roteiro_text = "".join(block.text for block in message.content if block.type == "text")
+    # Tenta o plano de assinatura via CLI primeiro (mais barato); só chama a
+    # API por token se a CLI não estiver disponível/autenticada ou falhar.
+    roteiro_text = _gerar_via_cli(system_prompt, user_content)
+    message = None
+    if roteiro_text is None:
+        message = client.messages.create(messages=messages, **kwargs)
+        roteiro_text = "".join(block.text for block in message.content if block.type == "text")
+
     parsed = roteiro_parser.parse(roteiro_text)
 
     # Sem retry (decisão deliberada de custo): o prompt foi desenhado pra
@@ -517,18 +593,19 @@ def main() -> None:
     else:
         print("--- QA ok: tamanhos, ganchos e CTAs dentro do esperado ---")
 
-    print(
-        f"--- Uso de tokens: entrada={message.usage.input_tokens}, "
-        f"saída={message.usage.output_tokens} ---"
-    )
-
-    if use_cache:
+    if message is not None:
         print(
-            f"--- Cache de prompt: escrita={message.usage.cache_creation_input_tokens} "
-            f"tokens, leitura={message.usage.cache_read_input_tokens} tokens ---"
+            f"--- Uso de tokens: entrada={message.usage.input_tokens}, "
+            f"saída={message.usage.output_tokens} ---"
         )
 
-    print(f"--- stop_reason: {message.stop_reason} ---")
+        if use_cache:
+            print(
+                f"--- Cache de prompt: escrita={message.usage.cache_creation_input_tokens} "
+                f"tokens, leitura={message.usage.cache_read_input_tokens} tokens ---"
+            )
+
+        print(f"--- stop_reason: {message.stop_reason} ---")
     print("--- Resposta bruta da Claude (primeiros 500 chars) ---")
     print(roteiro_text[:500])
     print("--- fim do trecho ---")
