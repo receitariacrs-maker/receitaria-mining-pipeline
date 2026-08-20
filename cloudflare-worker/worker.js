@@ -17,7 +17,11 @@
  * Rotas:
  *   POST /telegram-webhook   - endpoint que o Telegram chama a cada mensagem
  *   GET  /setup-webhook?key= - roda uma vez pra registrar esse Worker como
- *                              webhook do bot (key = WEBHOOK_SETUP_SECRET)
+ *                              webhook do bot (key = WEBHOOK_SETUP_SECRET) E
+ *                              registrar o menu nativo de comandos (ver
+ *                              registerBotCommands) - bater nessa rota de novo
+ *                              depois de mudar a lista de comandos também
+ *                              atualiza o menu.
  *   GET  /health             - checagem simples
  *
  * Comandos reconhecidos no chat (além de link/mídia):
@@ -109,6 +113,23 @@ async function dispatchEvent(env, clientPayload) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ event_type: "new-video", client_payload: clientPayload }),
+  });
+}
+
+/** Registra a lista de comandos no menu nativo do Telegram (aparece ao
+ * digitar "/" na caixa de texto) - assim os comandos existentes ficam
+ * visíveis sem precisar lembrar deles ou pedir ajuda no chat. Idempotente:
+ * pode ser chamada de novo a qualquer momento pra atualizar a lista. */
+async function registerBotCommands(env) {
+  await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setMyCommands`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      commands: [
+        { command: "forcar", description: "Processa agora tudo que estiver esperando na fila" },
+        { command: "limpar", description: "Apaga as mensagens que o bot mandou nesse chat" },
+      ],
+    }),
   });
 }
 
@@ -350,6 +371,7 @@ async function handleSetupWebhook(request, env, url) {
     `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setWebhook?url=${encodeURIComponent(webhookUrl)}`
   );
   const data = await resp.json();
+  await registerBotCommands(env);
   return new Response(JSON.stringify(data, null, 2), {
     headers: { "Content-Type": "application/json" },
   });
