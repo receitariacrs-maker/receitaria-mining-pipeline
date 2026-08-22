@@ -121,8 +121,12 @@ tokens → crie um token com permissão de "Contents: Read and write" e
 Se você já tem a chave Groq usada no PolyglotMedia, reaproveita ela. Senão,
 gere uma em https://console.groq.com → isso vira `GROQ_API_KEY`.
 
-### 7. Anthropic (geração do roteiro)
-Gere uma chave em https://console.anthropic.com → isso vira `ANTHROPIC_API_KEY`.
+### 7. Claude Code CLI (geração do roteiro)
+A geração do roteiro roda só via CLI do Claude Code, consumindo o plano de
+assinatura — não existe fallback de API (decisão deliberada pra nunca gastar
+crédito por token sem querer; se a CLI falhar, o passo falha e o Telegram
+avisa o erro). Gere um token OAuth com `claude setup-token` → isso vira
+`CLAUDE_CODE_OAUTH_TOKEN`.
 
 ### 8. Notion
 1. Crie uma integração interna em https://www.notion.so/my-integrations →
@@ -168,7 +172,7 @@ KB_GIST_TOKEN
 GH_DISPATCH_TOKEN
 APIFY_API_TOKEN
 GROQ_API_KEY
-ANTHROPIC_API_KEY
+CLAUDE_CODE_OAUTH_TOKEN
 NOTION_TOKEN
 NOTION_DATABASE_ID
 VENCEDORES_DATABASE_ID

@@ -50,10 +50,9 @@ jobs:
       - name: Instalar Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
 
-      - name: Gerar roteiro (CLI do plano de assinatura, com fallback pra API)
+      - name: Gerar roteiro (só CLI do plano de assinatura, sem fallback de API)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           KB_GIST_ID: ${{ secrets.KB_GIST_ID }}
           KB_GIST_TOKEN: ${{ secrets.KB_GIST_TOKEN }}

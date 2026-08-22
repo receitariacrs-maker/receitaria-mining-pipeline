@@ -1,9 +1,9 @@
 """
 Terceiro passo. Busca a base de conhecimento condensada do pipeline
 (SISTEMA_VIRAL_PIPELINE.md) de um Gist privado — não fica commitada nesse
-repositório público — e chama a API da Anthropic pra gerar o roteiro, no
-formato estruturado que o notion_insert.py sabe montar em blocos ricos (ver
-scripts/roteiro_parser.py).
+repositório público — e chama o Claude Code CLI (plano de assinatura, sem
+fallback de API) pra gerar o roteiro, no formato estruturado que o
+notion_insert.py sabe montar em blocos ricos (ver scripts/roteiro_parser.py).
 
 Decisões de custo (jul/2026): a KB embutida é a versão pipeline (~21k chars),
 não mais SISTEMA+BANCO completos (~175k chars) — entrada caiu de ~78k pra
@@ -23,7 +23,6 @@ import shutil
 import subprocess
 import time
 
-import anthropic
 import requests
 
 import context
@@ -32,7 +31,6 @@ import roteiro_parser
 
 MAX_RETRIES = 3
 
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 KB_GIST_ID = os.environ["KB_GIST_ID"]
 # Pode ser o mesmo valor do GIST_TOKEN (offset do Telegram) colado aqui de novo,
 # ou um token dedicado só pra esse Gist — mas precisa existir como secret próprio
@@ -424,14 +422,9 @@ def find_vencedor_match(source_url: str):
     return page["id"], nome
 
 
-def build_system_prompt(kb: str, vencedor_nome: str | None, use_cache: bool):
-    """Monta o prompt de sistema. A parte estável (instruções + formato + base de
-    conhecimento) é idêntica em toda chamada — quando use_cache=True, ela vai num
-    bloco próprio com cache_control, e a instrução de reciclagem (que varia por
-    vídeo) fica de fora, no final, pra não invalidar o prefixo cacheado.
-    use_cache só deve vir True quando o telegram_poll.py detectou mais de um
-    vídeo no mesmo ciclo — com um vídeo só, o prêmio de escrita do cache custa
-    mais do que não cachear (ver TTL 1h: escrita 2x vs leitura 0,1x)."""
+def build_system_prompt(kb: str, vencedor_nome: str | None) -> str:
+    """Monta o prompt de sistema (instruções + formato + base de conhecimento +
+    instrução de reciclagem, se houver)."""
     instrucoes_reciclagem = (
         f'ATENÇÃO: este vídeo de referência já é um vencedor conhecido do seu histórico '
         f'("{vencedor_nome}"). Isso é uma RECICLAGEM — use "PILAR: Reciclagem" obrigatoriamente, '
@@ -455,50 +448,18 @@ def build_system_prompt(kb: str, vencedor_nome: str | None, use_cache: bool):
         )
         + "\n\n" + kb
     )
-
-    if not use_cache:
-        return stable_prompt + ("\n\n" + instrucoes_reciclagem if instrucoes_reciclagem else "")
-
-    system = [{
-        "type": "text",
-        "text": stable_prompt,
-        "cache_control": {"type": "ephemeral", "ttl": "1h"},
-    }]
-    if instrucoes_reciclagem:
-        system.append({"type": "text", "text": instrucoes_reciclagem})
-    return system
+    return stable_prompt + ("\n\n" + instrucoes_reciclagem if instrucoes_reciclagem else "")
 
 
-# Não existe forma de checar o % de uso do plano de assinatura antes de
-# chamar (a Anthropic não expõe isso em nenhum endpoint) - o sinal usado pra
-# decidir "cai pra API" é reativo: qualquer erro que a CLI devolva (limite,
-# quota, indisponibilidade) já é motivo suficiente pro fallback de API key.
-def _system_prompt_text(system_prompt) -> str:
-    """`build_system_prompt` devolve string simples ou lista de blocos com
-    `cache_control` (recurso da API, sem equivalente na sessão de CLI) -
-    aqui achata pro texto puro que o `--append-system-prompt` do CLI espera."""
-    if isinstance(system_prompt, str):
-        return system_prompt
-    return "\n\n".join(block["text"] for block in system_prompt)
-
-
-def _gerar_via_cli(system_prompt, user_content: str) -> str | None:
-    """Tenta gerar o roteiro usando o Claude Code CLI (consome o plano de
-    assinatura, não a API por token). Retorna None em qualquer situação que
-    deva cair pro fallback de API - CLI ausente, sem credencial, erro de
-    limite/quota, ou qualquer falha inesperada. Nunca derruba o script: a
-    chamada de API em main() continua sendo a rede de segurança."""
+# Só CLI, sem fallback de API: se ela falhar (limite do plano, indisponibilidade,
+# CLI ausente), o passo falha e o Telegram avisa o erro (ver notifier.run_stage) -
+# decisão deliberada pra nunca gastar crédito de API sem querer.
+def _gerar_via_cli(system_prompt: str, user_content: str) -> str:
+    """Gera o roteiro usando o Claude Code CLI (plano de assinatura). Lança
+    RuntimeError em qualquer falha - CLI ausente, erro de limite/quota,
+    timeout, saída inválida. Não existe fallback de API."""
     if shutil.which("claude") is None:
-        print("--- CLI do Claude não encontrada no PATH, usando API diretamente ---")
-        return None
-
-    # A CLI, se enxergar ANTHROPIC_API_KEY no ambiente, prioriza billing por
-    # API key (pay-per-token) mesmo autenticada via CLAUDE_CODE_OAUTH_TOKEN -
-    # ou seja, "funcionava" mas cobrava como API, não como plano de
-    # assinatura. Por isso a chave é removida SÓ do ambiente do subprocesso
-    # da CLI; o processo Python continua com ela disponível pro fallback real
-    # (client.messages.create em main()).
-    cli_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+        raise RuntimeError("CLI do Claude não encontrada no PATH.")
 
     try:
         result = subprocess.run(
@@ -506,43 +467,37 @@ def _gerar_via_cli(system_prompt, user_content: str) -> str | None:
                 "claude", "-p",
                 "--output-format", "json",
                 "--model", MODEL,
-                "--append-system-prompt", _system_prompt_text(system_prompt),
+                "--append-system-prompt", system_prompt,
             ],
             input=user_content,
             capture_output=True,
             text=True,
             encoding="utf-8",
-            env=cli_env,
             # 180s não bastava pro prompt completo (KB inteira + transcrição,
             # ~17k tokens de entrada): a CLI tem overhead de inicialização que
             # a chamada direta de API não tem, e estava sempre estourando o
-            # timeout e caindo pra API. 400s dá margem real pra ela terminar.
+            # timeout. 400s dá margem real pra ela terminar.
             timeout=400,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
-        print(f"--- CLI falhou ao executar ({exc}), caindo para API ---")
-        return None
+        raise RuntimeError(f"CLI falhou ao executar: {exc}") from exc
 
     if result.returncode != 0:
-        print(f"--- CLI saiu com código {result.returncode}, caindo para API. stderr: {result.stderr[:500]} ---")
-        return None
+        raise RuntimeError(f"CLI saiu com código {result.returncode}. stderr: {result.stderr[:500]}")
 
     try:
         data = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        print("--- CLI devolveu saída que não é JSON válido, caindo para API ---")
-        return None
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("CLI devolveu saída que não é JSON válido.") from exc
 
     erro = data.get("error")
     if erro:
         tipo = erro.get("type") if isinstance(erro, dict) else None
-        print(f"--- CLI devolveu erro ({tipo or erro}), caindo para API ---")
-        return None
+        raise RuntimeError(f"CLI devolveu erro: {tipo or erro}")
 
     texto = data.get("result")
     if not texto:
-        print("--- CLI não devolveu texto em 'result', caindo para API ---")
-        return None
+        raise RuntimeError("CLI não devolveu texto em 'result'.")
 
     custo = data.get("total_cost_usd")
     print(f"--- Roteiro gerado via CLI (plano de assinatura). Custo estimado: {custo} ---")
@@ -553,10 +508,8 @@ def main() -> None:
     ctx = context.load()
     kb = fetch_kb()
     vencedor = find_vencedor_match(ctx.get("source_url"))
-    use_cache = bool(ctx.get("use_cache"))
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
-    system_prompt = build_system_prompt(kb, vencedor[1] if vencedor else None, use_cache)
+    system_prompt = build_system_prompt(kb, vencedor[1] if vencedor else None)
     abertura_referencia = _extrair_abertura_referencia(ctx["transcript"])
     user_content = (
         (
@@ -572,33 +525,13 @@ def main() -> None:
         f"link de origem: {ctx.get('source_url') or 'sem link, mídia enviada direto no Telegram'}):\n\n"
         f"{ctx['transcript']}"
     )
-    messages = [{"role": "user", "content": user_content}]
 
-    kwargs = dict(
-        model=MODEL,
-        max_tokens=8192,
-        # claude-sonnet-5 roda com "adaptive thinking" ligado por padrão quando esse
-        # parâmetro é omitido (diferente do Sonnet 4.6) - sem desligar, o "pensamento"
-        # pode consumir o max_tokens inteiro antes de escrever o roteiro, devolvendo
-        # resposta vazia. Essa tarefa é só formatação seguindo um template, não precisa
-        # de raciocínio em múltiplas etapas.
-        thinking={"type": "disabled"},
-        system=system_prompt,
-    )
-
-    # Tenta o plano de assinatura via CLI primeiro (mais barato); só chama a
-    # API por token se a CLI não estiver disponível/autenticada ou falhar.
     roteiro_text = _gerar_via_cli(system_prompt, user_content)
-    message = None
-    if roteiro_text is None:
-        message = client.messages.create(messages=messages, **kwargs)
-        roteiro_text = "".join(block.text for block in message.content if block.type == "text")
-
     parsed = roteiro_parser.parse(roteiro_text)
 
     # Sem retry (decisão deliberada de custo): o prompt foi desenhado pra
     # acertar de primeira (contrato estrutural + overshoot de tamanho). Se algo
-    # sair fora, vira aviso visível — nunca uma segunda chamada de API.
+    # sair fora, vira aviso visível — nunca uma segunda chamada.
     avisos = _avisos_qa(parsed)
     if avisos:
         print(f"--- Avisos de QA (sem retry, roteiro segue mesmo assim): {avisos} ---")
@@ -606,19 +539,6 @@ def main() -> None:
     else:
         print("--- QA ok: tamanhos, ganchos e CTAs dentro do esperado ---")
 
-    if message is not None:
-        print(
-            f"--- Uso de tokens: entrada={message.usage.input_tokens}, "
-            f"saída={message.usage.output_tokens} ---"
-        )
-
-        if use_cache:
-            print(
-                f"--- Cache de prompt: escrita={message.usage.cache_creation_input_tokens} "
-                f"tokens, leitura={message.usage.cache_read_input_tokens} tokens ---"
-            )
-
-        print(f"--- stop_reason: {message.stop_reason} ---")
     print("--- Resposta bruta da Claude (primeiros 500 chars) ---")
     print(roteiro_text[:500])
     print("--- fim do trecho ---")
@@ -644,5 +564,5 @@ if __name__ == "__main__":
         inicio="✍️ Escrevendo o roteiro no seu estilo...",
         sucesso="✅ Roteiro pronto. Agora vou salvar no Notion.",
         func=main,
-        dica_erro="Pode ser algo na base de conhecimento (os Gists) ou na chave da Anthropic.",
+        dica_erro="Pode ser algo na base de conhecimento (os Gists) ou no plano de assinatura da CLI (limite, token OAuth expirado).",
     )
