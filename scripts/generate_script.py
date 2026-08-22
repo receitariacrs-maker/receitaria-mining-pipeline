@@ -492,6 +492,14 @@ def _gerar_via_cli(system_prompt, user_content: str) -> str | None:
         print("--- CLI do Claude não encontrada no PATH, usando API diretamente ---")
         return None
 
+    # A CLI, se enxergar ANTHROPIC_API_KEY no ambiente, prioriza billing por
+    # API key (pay-per-token) mesmo autenticada via CLAUDE_CODE_OAUTH_TOKEN -
+    # ou seja, "funcionava" mas cobrava como API, não como plano de
+    # assinatura. Por isso a chave é removida SÓ do ambiente do subprocesso
+    # da CLI; o processo Python continua com ela disponível pro fallback real
+    # (client.messages.create em main()).
+    cli_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+
     try:
         result = subprocess.run(
             [
@@ -504,6 +512,7 @@ def _gerar_via_cli(system_prompt, user_content: str) -> str | None:
             capture_output=True,
             text=True,
             encoding="utf-8",
+            env=cli_env,
             # 180s não bastava pro prompt completo (KB inteira + transcrição,
             # ~17k tokens de entrada): a CLI tem overhead de inicialização que
             # a chamada direta de API não tem, e estava sempre estourando o
